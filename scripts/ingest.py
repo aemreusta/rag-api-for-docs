@@ -1,10 +1,9 @@
 from pathlib import Path
 from typing import List
 
-import chromadb
-from llama_index import ServiceContext, StorageContext, download_loader
+from llama_index import ServiceContext, StorageContext, VectorStoreIndex, download_loader
 from llama_index.embeddings import OpenAIEmbedding
-from llama_index.vector_stores import ChromaVectorStore
+from llama_index.vector_stores import PGVectorStore
 
 from app.core.config import settings
 
@@ -19,12 +18,16 @@ def get_pdf_files() -> List[Path]:
 
 
 def main():
-    # Initialize ChromaDB
-    chroma_client = chromadb.PersistentClient(path="./chroma_db")
-    chroma_collection = chroma_client.get_or_create_collection("documents")
-
-    # Setup vector store
-    vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+    # Setup PostgreSQL vector store
+    vector_store = PGVectorStore.from_params(
+        database=settings.POSTGRES_DB,
+        host=settings.POSTGRES_SERVER,
+        password=settings.POSTGRES_PASSWORD,
+        port=5432,
+        user=settings.POSTGRES_USER,
+        table_name="document_vectors",
+        embed_dim=1536,  # OpenAI embedding dimension
+    )
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
     # Setup embedding model
@@ -36,22 +39,24 @@ def main():
 
     # Process each PDF file
     pdf_files = get_pdf_files()
+    total_documents = 0
+
     for pdf_file in pdf_files:
         print(f"Processing {pdf_file}...")
         loader = PDFReader()
         documents = loader.load_data(file=pdf_file)
 
-        from llama_index import VectorStoreIndex
-
-        index = VectorStoreIndex.from_documents(
+        # Create index for the current PDF
+        VectorStoreIndex.from_documents(
             documents,
             service_context=service_context,
             storage_context=storage_context,
         )
 
-        # Save index for future use
-        index.storage_context.persist(persist_dir="./storage")
+        total_documents += len(documents)
         print(f"Indexed {len(documents)} documents from {pdf_file}")
+
+    print(f"\nTotal documents indexed: {total_documents}")
 
 
 if __name__ == "__main__":

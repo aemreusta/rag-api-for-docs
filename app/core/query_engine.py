@@ -1,11 +1,10 @@
 from typing import Optional
 
-import chromadb
 from langfuse.client import Langfuse
 from llama_index import ServiceContext, StorageContext, VectorStoreIndex
 from llama_index.embeddings import OpenAIEmbedding
 from llama_index.llms import OpenAI
-from llama_index.vector_stores import ChromaVectorStore
+from llama_index.vector_stores import PGVectorStore
 
 from app.core.config import settings
 
@@ -19,12 +18,16 @@ class QueryEngine:
             host=settings.LANGFUSE_HOST,
         )
 
-        # Initialize ChromaDB
-        self.chroma_client = chromadb.PersistentClient(path="./chroma_db")
-        self.chroma_collection = self.chroma_client.get_or_create_collection("documents")
-
         # Setup vector store
-        self.vector_store = ChromaVectorStore(chroma_collection=self.chroma_collection)
+        self.vector_store = PGVectorStore.from_params(
+            database=settings.POSTGRES_DB,
+            host=settings.POSTGRES_SERVER,
+            password=settings.POSTGRES_PASSWORD,
+            port=5432,
+            user=settings.POSTGRES_USER,
+            table_name="document_vectors",
+            embed_dim=1536,  # OpenAI embedding dimension
+        )
 
         # Setup LlamaIndex components
         self.embed_model = OpenAIEmbedding()

@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: str
     LANGFUSE_HOST: Optional[str] = "https://cloud.langfuse.com"
 
+    # PostgreSQL Settings
+    POSTGRES_SERVER: str = "postgres"
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"
+    POSTGRES_DB: str = "app"
+
     # Document Settings
     PDF_DOCUMENTS_DIR: str = "pdf_documents"
 

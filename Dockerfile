@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
     git \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pip-tools for dependency management
@@ -26,7 +27,7 @@ RUN pip install --no-cache-dir \
     ipython
 
 # Create necessary directories
-RUN mkdir -p pdf_documents chroma_db
+RUN mkdir -p pdf_documents
 
 # Copy the rest of the application
 COPY . .
