@@ -21,9 +21,7 @@ class QueryEngine:
 
         # Initialize ChromaDB
         self.chroma_client = chromadb.PersistentClient(path="./chroma_db")
-        self.chroma_collection = self.chroma_client.get_or_create_collection(
-            "documents"
-        )
+        self.chroma_collection = self.chroma_client.get_or_create_collection("documents")
 
         # Setup vector store
         self.vector_store = ChromaVectorStore(chroma_collection=self.chroma_collection)
@@ -39,9 +37,7 @@ class QueryEngine:
         )
 
         # Initialize storage context
-        self.storage_context = StorageContext.from_defaults(
-            vector_store=self.vector_store
-        )
+        self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
 
         # Create index
         self.index = VectorStoreIndex.from_vector_store(

@@ -33,20 +33,20 @@ def main():
 
     # Load PDF files
     PDFReader = download_loader("PDFReader")
-    loader = PDFReader()
 
     # Process each PDF file
     pdf_files = get_pdf_files()
     for pdf_file in pdf_files:
         print(f"Processing {pdf_file}...")
+        loader = PDFReader()
         documents = loader.load_data(file=pdf_file)
 
-        # Create index for the documents
         from llama_index import VectorStoreIndex
 
         index = VectorStoreIndex.from_documents(
             documents,
             service_context=service_context,
+            storage_context=storage_context,
         )
 
         # Save index for future use
