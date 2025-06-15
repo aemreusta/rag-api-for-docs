@@ -1,62 +1,69 @@
-from pathlib import Path
-from typing import List
+import logging
 
-from llama_index import ServiceContext, StorageContext, VectorStoreIndex, download_loader
-from llama_index.embeddings import OpenAIEmbedding
-from llama_index.vector_stores import PGVectorStore
+import psycopg2  # Used to check for the extension
+from llama_index.core import (
+    Settings as LlamaSettings,
+)
+from llama_index.core import (
+    SimpleDirectoryReader,
+    StorageContext,
+    VectorStoreIndex,
+)
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.llms.openrouter import OpenRouter
+from llama_index.vector_stores.postgres import PGVectorStore
 
 from app.core.config import settings
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def get_pdf_files() -> List[Path]:
-    """Get all PDF files from the documents directory."""
-    pdf_dir = Path(settings.PDF_DOCUMENTS_DIR)
-    if not pdf_dir.exists():
-        raise Exception(f"PDF documents directory not found: {pdf_dir}")
-
-    return list(pdf_dir.glob("*.pdf"))
+PDF_DIRECTORY = "pdf_documents/"
 
 
 def main():
-    # Setup PostgreSQL vector store
-    vector_store = PGVectorStore.from_params(
-        database=settings.POSTGRES_DB,
-        host=settings.POSTGRES_SERVER,
-        password=settings.POSTGRES_PASSWORD,
-        port=5432,
-        user=settings.POSTGRES_USER,
-        table_name="document_vectors",
-        embed_dim=1536,  # OpenAI embedding dimension
+    logger.info("Starting data ingestion process...")
+
+    # Verify pgvector extension is enabled
+    conn = psycopg2.connect(settings.DATABASE_URL)
+    cur = conn.cursor()
+    cur.execute("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
+    if cur.fetchone() is None:
+        logger.error("pgvector extension not found. Please enable it in your database.")
+        conn.close()
+        return
+    conn.close()
+
+    # Set up LlamaIndex LLM and Embedding Model
+    LlamaSettings.llm = OpenRouter(
+        api_key=settings.OPENROUTER_API_KEY, model=settings.LLM_MODEL_NAME
     )
+    # Using a default local embedding model for ingestion is fast and free
+    LlamaSettings.embed_model = "local:BAAI/bge-small-en-v1.5"
+
+    # Load documents from the PDF directory
+    reader = SimpleDirectoryReader(input_dir=PDF_DIRECTORY)
+    documents = reader.load_data()
+    logger.info(f"Loaded {len(documents)} document(s) from '{PDF_DIRECTORY}'.")
+
+    # Set up the PGVectorStore
+    vector_store = PGVectorStore.from_params(
+        dsn=settings.DATABASE_URL,
+        table_name="charity_policies",
+        embed_dim=384,  # Dimension for bge-small-en-v1.5
+    )
+
+    # Build the index
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
+    node_parser = SentenceSplitter(chunk_size=512, chunk_overlap=20)
 
-    # Setup embedding model
-    embed_model = OpenAIEmbedding()
-    service_context = ServiceContext.from_defaults(embed_model=embed_model)
-
-    # Load PDF files
-    PDFReader = download_loader("PDFReader")
-
-    # Process each PDF file
-    pdf_files = get_pdf_files()
-    total_documents = 0
-
-    for pdf_file in pdf_files:
-        print(f"Processing {pdf_file}...")
-        loader = PDFReader()
-        documents = loader.load_data(file=pdf_file)
-
-        # Create index for the current PDF
-        VectorStoreIndex.from_documents(
-            documents,
-            service_context=service_context,
-            storage_context=storage_context,
-        )
-
-        total_documents += len(documents)
-        print(f"Indexed {len(documents)} documents from {pdf_file}")
-
-    print(f"\nTotal documents indexed: {total_documents}")
+    VectorStoreIndex.from_documents(
+        documents,
+        storage_context=storage_context,
+        node_parser=node_parser,
+        show_progress=True,
+    )
+    logger.info("Successfully built index and stored it in PostgreSQL.")
 
 
 if __name__ == "__main__":
