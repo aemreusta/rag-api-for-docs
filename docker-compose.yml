@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./pdf_documents:/app/pdf_documents
+      - ./chroma_db:/app/chroma_db
+    env_file:
+      - .env
+    depends_on:
+      - langfuse
+    networks:
+      - app-network
+
+  # Optional: Self-hosted Langfuse
+  # Uncomment to use self-hosted version instead of cloud
+  langfuse:
+    image: ghcr.io/langfuse/langfuse:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/langfuse
+      - NEXTAUTH_SECRET=your-nextauth-secret
+      - SALT=your-salt
+      - TELEMETRY_ENABLED=false
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=langfuse
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge 

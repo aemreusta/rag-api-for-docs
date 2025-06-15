@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pydantic
+pydantic-settings
+python-multipart
+llama-index
+langfuse
+chromadb
+openai
+python-dotenv
+pip-tools
+pre-commit
+ruff 

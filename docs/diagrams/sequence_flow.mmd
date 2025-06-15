@@ -1,0 +1,22 @@
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Backend (FastAPI)
+    participant LlamaIndex Engine
+    participant Langfuse
+
+    User->>Frontend: Asks a question
+    Frontend->>Backend: POST /api/v1/chat (with question & session_id)
+    
+    Backend->>Langfuse: 1. Create Trace
+    
+    Backend->>LlamaIndex Engine: 2. query(question)
+    LlamaIndex Engine->>Langfuse: Log Retrieval Step
+    LlamaIndex Engine->>Langfuse: Log LLM Prompt Step
+    LlamaIndex Engine->>Langfuse: Log LLM Response Step
+    LlamaIndex Engine-->>Backend: 3. Returns response object (answer & sources)
+    
+    Backend->>Langfuse: 4. Update Trace with final response & user feedback
+    
+    Backend-->>Frontend: 200 OK with JSON response
+    Frontend->>User: Displays the answer 

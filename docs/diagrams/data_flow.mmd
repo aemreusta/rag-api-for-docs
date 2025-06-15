@@ -1,0 +1,27 @@
+graph TD
+    subgraph "User's Browser"
+        User
+    end
+
+    subgraph "Backend Infrastructure (Docker)"
+        A[FastAPI Application]
+        B[LlamaIndex Query Engine]
+        C[PostgreSQL w/ pgvector]
+        D[Redis Rate Limiter]
+    end
+
+    subgraph "External Services & Platforms"
+        E[OpenRouter API]
+        F[Langfuse Platform]
+    end
+
+    User --"1. HTTPS Request"--> A;
+    A --"2. Rate Limit Check"--> D;
+    A --"3. Query"--> B;
+    B --"4. Retrieve Context"--> C;
+    B --"5. Prompt + Context"--> E;
+    A --"6. Send Trace Data"--> F;
+    B --"7. Send Trace Data"--> F;
+    E --"8. LLM Response"--> B;
+    B --"9. Final Answer"--> A;
+    A --"10. JSON Response"--> User; 
