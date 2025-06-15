@@ -7,6 +7,7 @@ llama-index
 llama-index-llms-openrouter
 llama-index-vector-stores-postgres
 llama-index-embeddings-huggingface
+llama-index-callbacks-langfuse
 langfuse
 psycopg2-binary
 openai

@@ -48,6 +48,30 @@ def check_pgvector_extension():
         return False
 
 
+def check_langfuse_connection():
+    """Check if Langfuse is accessible."""
+    try:
+        from llama_index.callbacks.langfuse.base import LlamaIndexCallbackHandler
+
+        # Try to create a handler to test connectivity
+        handler = LlamaIndexCallbackHandler(
+            public_key=settings.LANGFUSE_PUBLIC_KEY,
+            secret_key=settings.LANGFUSE_SECRET_KEY,
+            host=settings.LANGFUSE_HOST,
+        )
+
+        # Test basic functionality
+        handler.start_trace(name="test-connection")
+        handler.end_trace(output={"status": "test"})
+        handler.flush()
+
+        logger.info("✅ Langfuse connection successful")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Langfuse connection failed: {e}")
+        return False
+
+
 def check_pdf_files():
     """Check if PDF files exist in the documents directory."""
     pdf_dir = "pdf_documents/"
@@ -149,6 +173,7 @@ def main():
         ("Environment Variables", check_environment_variables),
         ("Database Connection", check_database_connection),
         ("pgvector Extension", check_pgvector_extension),
+        ("Langfuse Connection", check_langfuse_connection),
         ("PDF Files", check_pdf_files),
     ]
 
@@ -169,6 +194,11 @@ def main():
         sys.exit(1)
 
     logger.info("🎉 Integration test completed successfully!")
+    logger.info(
+        "💡 Check your Langfuse dashboard at {} for the ingestion trace".format(
+            settings.LANGFUSE_HOST
+        )
+    )
 
 
 if __name__ == "__main__":

@@ -1,8 +1,10 @@
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.core.config import settings
-from scripts.ingest import main
+from scripts.ingest import PDF_DIRECTORY, main
 
 
 def test_ingestion_script_imports():
@@ -19,8 +21,15 @@ def test_ingestion_script_imports():
 @patch("scripts.ingest.VectorStoreIndex.from_documents")
 @patch("scripts.ingest.SimpleDirectoryReader")
 @patch("scripts.ingest.PGVectorStore.from_params")
-def test_ingestion_main_function(mock_pgvector, mock_reader, mock_index, mock_connect):
+@patch("scripts.ingest.LlamaIndexCallbackHandler")
+def test_ingestion_main_function(
+    mock_langfuse_handler, mock_pgvector, mock_reader, mock_index, mock_connect
+):
     """Test the main ingestion function with mocked dependencies."""
+    # Mock Langfuse handler
+    mock_handler_instance = MagicMock()
+    mock_langfuse_handler.return_value = mock_handler_instance
+
     # Mock database connection and cursor
     mock_conn = MagicMock()
     mock_cursor = MagicMock()
@@ -45,6 +54,20 @@ def test_ingestion_main_function(mock_pgvector, mock_reader, mock_index, mock_co
     # Run the main function
     main()
 
+    # Verify Langfuse setup
+    mock_langfuse_handler.assert_called_once_with(
+        public_key=settings.LANGFUSE_PUBLIC_KEY,
+        secret_key=settings.LANGFUSE_SECRET_KEY,
+        host=settings.LANGFUSE_HOST,
+    )
+    mock_handler_instance.start_trace.assert_called_once_with(
+        name="pdf-ingestion", metadata={"source_directory": PDF_DIRECTORY}
+    )
+    mock_handler_instance.end_trace.assert_called_once_with(
+        output={"status": "success", "documents_indexed": len(mock_documents)}
+    )
+    mock_handler_instance.flush.assert_called_once()
+
     # Verify the function calls
     mock_connect.assert_called_once_with(settings.DATABASE_URL)
     mock_cursor.execute.assert_called_once_with(
@@ -60,8 +83,13 @@ def test_ingestion_main_function(mock_pgvector, mock_reader, mock_index, mock_co
 
 
 @patch("scripts.ingest.psycopg2.connect")
-def test_ingestion_missing_pgvector_extension(mock_connect):
+@patch("scripts.ingest.LlamaIndexCallbackHandler")
+def test_ingestion_missing_pgvector_extension(mock_langfuse_handler, mock_connect):
     """Test that the script exits gracefully when pgvector extension is missing."""
+    # Mock Langfuse handler
+    mock_handler_instance = MagicMock()
+    mock_langfuse_handler.return_value = mock_handler_instance
+
     # Mock database connection and cursor
     mock_conn = MagicMock()
     mock_cursor = MagicMock()
@@ -71,6 +99,14 @@ def test_ingestion_missing_pgvector_extension(mock_connect):
 
     # Run the main function
     main()
+
+    # Verify Langfuse was set up and error was traced
+    mock_langfuse_handler.assert_called_once()
+    mock_handler_instance.start_trace.assert_called_once()
+    mock_handler_instance.end_trace.assert_called_with(
+        output={"status": "error", "error": "pgvector extension not found"}
+    )
+    mock_handler_instance.flush.assert_called_once()
 
     # Verify the function exits early
     mock_connect.assert_called_once_with(settings.DATABASE_URL)
@@ -89,3 +125,13 @@ def test_sample_pdf_exists():
     """Test that our sample PDF file exists."""
     sample_pdf = "pdf_documents/sample_policy.pdf"
     assert os.path.exists(sample_pdf), f"Sample PDF should exist at {sample_pdf}"
+
+
+def test_langfuse_imports():
+    """Test that Langfuse imports work correctly."""
+    try:
+        from llama_index.callbacks.langfuse.base import LlamaIndexCallbackHandler
+
+        assert LlamaIndexCallbackHandler is not None
+    except ImportError as e:
+        pytest.fail(f"Langfuse imports failed: {e}")
