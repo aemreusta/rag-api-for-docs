@@ -1,49 +1,82 @@
 version: '3.8'
 
 services:
-  api:
-    build: .
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     volumes:
+      - ./app:/app/app  # Live code reloading
       - ./pdf_documents:/app/pdf_documents
-      - ./chroma_db:/app/chroma_db
+      - ./tests:/app/tests  # For running tests
     env_file:
       - .env
+    environment:
+      - POSTGRES_SERVER=postgres
+      - REDIS_HOST=redis
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
-      - langfuse
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      langfuse:
+        condition: service_started
     networks:
       - app-network
 
-  # Optional: Self-hosted Langfuse
-  # Uncomment to use self-hosted version instead of cloud
+  postgres:
+    image: ankane/pgvector:latest
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-app}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
   langfuse:
     image: ghcr.io/langfuse/langfuse:latest
     ports:
       - "3000:3000"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/langfuse
-      - NEXTAUTH_SECRET=your-nextauth-secret
-      - SALT=your-salt
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-your-nextauth-secret}
+      - SALT=${SALT:-your-salt}
       - TELEMETRY_ENABLED=false
     depends_on:
-      - postgres
-    networks:
-      - app-network
-
-  postgres:
-    image: postgres:15
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=langfuse
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      postgres:
+        condition: service_healthy
     networks:
       - app-network
 
 volumes:
   postgres_data:
+  redis_data:
 
 networks:
   app-network:
