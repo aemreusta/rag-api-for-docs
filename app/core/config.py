@@ -1,19 +1,28 @@
-from typing import Optional
-
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # API Settings
-    API_KEY: str
+    # Database
+    DATABASE_URL: str
 
-    # LlamaIndex Settings
-    OPENAI_API_KEY: str
+    # LLM Provider
+    OPENROUTER_API_KEY: str
+    LLM_MODEL_NAME: str = "google/gemini-1.5-pro-latest"
 
-    # Langfuse Settings
+    # Langfuse Observability
     LANGFUSE_PUBLIC_KEY: str
     LANGFUSE_SECRET_KEY: str
-    LANGFUSE_HOST: Optional[str] = "https://cloud.langfuse.com"
+    LANGFUSE_HOST: str = "http://langfuse:3000"  # Using Docker Compose service name
+
+    # Security
+    API_KEY: str  # For the chat endpoint
+    ADMIN_API_KEY: str  # For the admin endpoint
+
+    # Optional settings with defaults
+    DEBUG: bool = False
+    ENVIRONMENT: str = "development"
+    LOG_LEVEL: str = "INFO"
 
     # PostgreSQL Settings
     POSTGRES_SERVER: str = "postgres"
@@ -24,8 +33,7 @@ class Settings(BaseSettings):
     # Document Settings
     PDF_DOCUMENTS_DIR: str = "pdf_documents"
 
-    class Config:
-        env_file = ".env"
+    model_config = ConfigDict(env_file=".env", case_sensitive=True)
 
 
 settings = Settings()
