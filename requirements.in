@@ -4,10 +4,15 @@ pydantic
 pydantic-settings
 python-multipart
 llama-index
+llama-index-llms-openrouter
+llama-index-vector-stores-postgres
+llama-index-embeddings-huggingface
 langfuse
 psycopg2-binary
 openai
 python-dotenv
 pip-tools
 pre-commit
-ruff 
+ruff
+pytest
+reportlab
