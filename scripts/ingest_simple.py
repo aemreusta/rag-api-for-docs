@@ -1,7 +1,6 @@
 import logging
 
 import psycopg2  # Used to check for the extension
-from llama_index.callbacks.langfuse.base import LlamaIndexCallbackHandler
 from llama_index.core import (
     Settings as LlamaSettings,
 )
@@ -10,7 +9,6 @@ from llama_index.core import (
     StorageContext,
     VectorStoreIndex,
 )
-from llama_index.core.callbacks import CallbackManager
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.llms.openrouter import OpenRouter
 from llama_index.vector_stores.postgres import PGVectorStore
@@ -24,15 +22,7 @@ PDF_DIRECTORY = "pdf_documents/"
 
 
 def main():
-    # --- Langfuse Setup ---
-    langfuse_handler = LlamaIndexCallbackHandler(
-        public_key=settings.LANGFUSE_PUBLIC_KEY,
-        secret_key=settings.LANGFUSE_SECRET_KEY,
-        host=settings.LANGFUSE_HOST,
-    )
-    LlamaSettings.callback_manager = CallbackManager([langfuse_handler])  # Add Langfuse handler
-
-    logger.info("Starting data ingestion process...")
+    logger.info("Starting simplified data ingestion process...")
 
     # Verify pgvector extension is enabled
     logger.info("Checking pgvector extension...")
