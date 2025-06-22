@@ -6,7 +6,7 @@
 
 An intelligent, production-ready API service designed to answer user questions about a charity's policies based on a provided set of PDF documents. This project uses a Retrieval-Augmented Generation (RAG) architecture to provide accurate, context-aware answers while integrating best-in-class tools for observability and maintainability.
 
-### Core Features
+## Core Features
 
 - **High-Accuracy RAG:** Leverages **LlamaIndex** for state-of-the-art data ingestion, indexing, and retrieval from PDF documents.
 - **Conversational Memory:** The chatbot remembers the last few turns of the conversation to answer follow-up questions effectively.
@@ -16,7 +16,7 @@ An intelligent, production-ready API service designed to answer user questions a
 - **Model Flexibility:** Uses **OpenRouter** to easily switch between different LLMs (e.g., Gemini, Claude) to optimize for cost and performance.
 - **Automated Data Ingestion:** A secure admin endpoint allows for triggering data re-ingestion without manual intervention.
 
-### Tech Stack
+## Tech Stack
 
 | Component | Technology | Rationale / Purpose |
 |-----------|------------|-------------------|
@@ -29,7 +29,7 @@ An intelligent, production-ready API service designed to answer user questions a
 | AI Model Access | OpenRouter | Provides model flexibility and cost comparison. Now integrated as the LLM provider within LlamaIndex. |
 | Containerization | Docker | Used to package the FastAPI app and its dependencies into a portable container for consistent deployment. |
 
-### Project Structure
+## Project Structure
 
 ```
 chatbot-api-service/
@@ -57,7 +57,7 @@ chatbot-api-service/
 └── requirements.txt             # Python dependencies
 ```
 
-### Setup and Installation
+## Setup and Installation
 
 1. **Clone the Repository**
 
@@ -94,7 +94,7 @@ chatbot-api-service/
    docker-compose exec app python -m scripts.ingest
    ```
 
-### API Endpoints
+## API Endpoints
 
 - **Interactive Docs:** Navigate to `http://localhost:8000/docs` to see the auto-generated Swagger UI.
 
@@ -108,11 +108,11 @@ chatbot-api-service/
   - **Authentication:** Requires a separate `X-Admin-API-Key` in the header.
   - **Purpose:** Triggers a background task to re-process all documents in the `pdf_documents` folder.
 
-### Observability with Langfuse
+## Observability with Langfuse
 
 After running the service, you can view detailed traces of every API call in Langfuse. If using the default `docker-compose.yml`, the Langfuse UI will be available at `http://localhost:3000`. This is invaluable for debugging, analyzing costs, and evaluating the quality of your RAG pipeline.
 
-### Conventional Commits
+## Conventional Commits
 
 We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification for commit messages. This helps maintain a clear and standardized commit history.
 
@@ -143,7 +143,7 @@ test(api): add integration tests for chat endpoint
 
 Scope is optional and should be the name of the module affected (chat, query, api, etc).
 
-### Contributing
+## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change. Please make sure to:
 

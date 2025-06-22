@@ -1,5 +1,3 @@
-from typing import Optional
-
 from langfuse.client import Langfuse
 from llama_index import ServiceContext, StorageContext, VectorStoreIndex
 from llama_index.embeddings import OpenAIEmbedding
@@ -48,7 +46,7 @@ class QueryEngine:
             service_context=self.service_context,
         )
 
-    async def query(self, query_text: str, chat_history: Optional[list] = None) -> str:
+    async def query(self, query_text: str, chat_history: list | None = None) -> str:
         # Create a Langfuse trace for monitoring
         trace = self.langfuse.trace(name="query")
 

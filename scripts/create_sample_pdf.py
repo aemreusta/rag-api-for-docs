@@ -12,7 +12,7 @@ from reportlab.pdfgen import canvas
 def create_pdf_from_text(text_file_path, pdf_file_path):
     """Convert text file to PDF."""
     # Read the text file
-    with open(text_file_path, "r", encoding="utf-8") as f:
+    with open(text_file_path, encoding="utf-8") as f:
         content = f.read()
 
     # Create PDF

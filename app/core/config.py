@@ -33,7 +33,9 @@ class Settings(BaseSettings):
     # Document Settings
     PDF_DOCUMENTS_DIR: str = "pdf_documents"
 
-    model_config = ConfigDict(env_file=".env", case_sensitive=True)
+    model_config = ConfigDict(
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore"
+    )
 
 
 settings = Settings()
