@@ -1,0 +1,30 @@
+graph TD
+    subgraph "PostgreSQL Container"
+        direction LR
+        subgraph "Application DB ('app')"
+            T1[content_embeddings<br/>- id: INTEGER PK<br/>- source_document: VARCHAR(255)<br/>- page_number: INTEGER<br/>- content_text: TEXT<br/>- content_vector: VECTOR(384)]
+            T2[query_logs<br/>- id: INTEGER PK<br/>- query_text: TEXT<br/>- response_text: TEXT<br/>- session_id: VARCHAR(255)]
+            T3[alembic_version<br/>- version_num: VARCHAR(32) PK]
+        end
+
+        subgraph "Langfuse DB ('langfuse')"
+            LT[traces<br/>- Tracing data]
+            LO[observations<br/>- LLM calls & spans]
+            LS[scores<br/>- Evaluation metrics]
+            LU[users<br/>- User management]
+            Note1[... other tables]
+        end
+    end
+
+    subgraph "Application Services"
+        App[FastAPI App<br/>Your Code]
+        LangfuseSvc[Langfuse Service<br/>Pre-built Container]
+    end
+
+    App -- "Reads/Writes RAG data" --> T1
+    App -- "Logs queries" --> T2
+    App -- "Migration tracking" --> T3
+    LangfuseSvc -- "Reads/Writes tracing data" --> LT
+    LangfuseSvc -- "Stores LLM interactions" --> LO
+    LangfuseSvc -- "Evaluation data" --> LS
+    LangfuseSvc -- "User sessions" --> LU 
