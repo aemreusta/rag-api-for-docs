@@ -2,33 +2,51 @@
 
 This updated plan leverages the new frameworks to accelerate development and focus on quality.
 
-## Phase 1: Setup & Data Ingestion
+## Phase 1: Setup & Data Ingestion ✅ **COMPLETED**
 
 **Goal**: Establish the core infrastructure and create a high-quality, indexed knowledge base.
 
 **Details**:
 
-- **Setup**: Configure the environment with FastAPI, LlamaIndex, Langfuse, Docker, Postgres, and Redis.
-- **Ingestion Script**: Refactor `scripts/ingest.py` to use LlamaIndex's PyMuPDFReader and SentenceSplitter (or a more advanced node parser).
-- **Indexing**: Configure the PGVectorStore in LlamaIndex and run the ingestion script to populate the database with embeddings.
-- **Observability**: Integrate the Langfuse SDK from day one to trace the ingestion process.
+- ✅ **Setup**: Configure the environment with FastAPI, LlamaIndex, Langfuse, Docker, Postgres, and Redis.
+- ✅ **Ingestion Script**: Refactor `scripts/ingest.py` to use LlamaIndex's PyMuPDFReader and SentenceSplitter (or a more advanced node parser).
+- ✅ **Indexing**: Configure the PGVectorStore in LlamaIndex and run the ingestion script to populate the database with embeddings.
+- ✅ **Observability**: Integrate the Langfuse SDK from day one to trace the ingestion process.
+- ✅ **Quality Assurance**: Comprehensive testing (7/7 tests passing), pre-commit hooks, and code quality validation.
 
-**Outcome**: A versioned, indexed knowledge base in PostgreSQL and a repeatable ingestion script.
+**Outcome**: ✅ **ACHIEVED** - A versioned, indexed knowledge base in PostgreSQL and a repeatable ingestion script.
 
-## Phase 2: Query Engine Development & Evaluation
+**Current Status**:
+
+- API server running on <http://localhost:8000>
+- PostgreSQL with pgvector extension enabled
+- Redis cache operational
+- Langfuse observability platform running on <http://localhost:3000>
+- PDF documents successfully indexed (sample_policy.pdf)
+- All tests passing (35% code coverage)
+- Pre-commit hooks and quality gates implemented
+
+## Phase 2: Query Engine Development & Evaluation 🚧 **IN PROGRESS**
 
 **Goal**: Build and validate the core RAG pipeline that can answer questions accurately.
 
 **Details**:
 
-- **Build Engine**: In `core/query_engine.py`, construct a LlamaIndex QueryEngine (e.g., RetrieverQueryEngine). Configure it to use your vector store retriever and the OpenRouter LLM.
-- **API Endpoint**: Wire the query engine to the FastAPI endpoint in `chat.py`.
-- **Create Dataset**: In Langfuse, create a "golden dataset" of 20-50 important questions with ideal answers.
-- **Evaluate**: Run your first evaluations using Langfuse to score the baseline engine on metrics like Faithfulness, Answer Relevancy, and Context Precision.
+- 🔄 **Build Engine**: In `core/query_engine.py`, construct a LlamaIndex QueryEngine (e.g., RetrieverQueryEngine). Configure it to use your vector store retriever and the OpenRouter LLM.
+- 🔄 **API Endpoint**: Wire the query engine to the FastAPI endpoint in `chat.py`.
+- ⏳ **Create Dataset**: In Langfuse, create a "golden dataset" of 20-50 important questions with ideal answers.
+- ⏳ **Evaluate**: Run your first evaluations using Langfuse to score the baseline engine on metrics like Faithfulness, Answer Relevancy, and Context Precision.
 
 **Outcome**: A functional API endpoint whose quality is tracked and measured.
 
-## Phase 3: Advanced Features & Deployment
+**Next Steps**:
+
+1. Implement chat endpoint in `app/api/v1/chat.py`
+2. Wire query engine to FastAPI routes
+3. Create evaluation dataset in Langfuse
+4. Run initial quality assessments
+
+## Phase 3: Advanced Features & Deployment ⏳ **PLANNED**
 
 **Goal**: Implement conversational memory and deploy the secure, observable service.
 
@@ -41,7 +59,7 @@ This updated plan leverages the new frameworks to accelerate development and foc
 
 **Outcome**: A smart, secure, and observable chatbot is live and accessible to the public.
 
-## Phase 4: Continuous Improvement & Tuning
+## Phase 4: Continuous Improvement & Tuning ⏳ **PLANNED**
 
 **Goal**: Use the observability platform to systematically improve the chatbot's performance, cost, and quality.
 
@@ -53,3 +71,33 @@ This updated plan leverages the new frameworks to accelerate development and foc
 - **Tune**: Based on data, make informed decisions to tune the system for better performance and user satisfaction.
 
 **Outcome**: A mature, data-driven workflow for maintaining and enhancing a high-quality AI service.
+
+## Development Commands for Current Phase
+
+With Phase 1 complete, these are the key commands for ongoing development:
+
+```bash
+# System Management
+make up          # Start all services
+make down        # Stop all services
+make logs        # View service logs
+
+# Development
+make test        # Run tests (should show 7/7 passing)
+make lint        # Check code quality
+make format      # Format code
+make shell       # Access app container
+
+# Database
+make db-shell    # Access PostgreSQL
+make ingest      # Re-run data ingestion
+```
+
+## Quality Metrics Achieved
+
+- ✅ **Tests**: 7/7 passing
+- ✅ **Coverage**: 35% (appropriate for infrastructure phase)
+- ✅ **Linting**: All checks pass
+- ✅ **Security**: Secrets scanning enabled
+- ✅ **Documentation**: Comprehensive setup guides
+- ✅ **Observability**: Langfuse integration ready

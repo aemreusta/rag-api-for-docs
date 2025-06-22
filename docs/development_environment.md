@@ -7,242 +7,353 @@ This document outlines our Docker-based development environment setup, which ens
 - Docker Desktop (latest version)
 - Git
 - A text editor (VS Code recommended)
-- Make (optional, for using Makefile shortcuts)
+- Make (for using Makefile shortcuts)
 
-## Environment Setup Options
+## 🚀 Quick Setup
 
-We provide three setup options, with the Docker-based setup being our recommended approach:
+```bash
+# 1. Clone the repository
+git clone https://github.com/your-org/chatbot-api-service.git
+cd chatbot-api-service
 
-### Option 1: Full Docker Setup (Recommended)
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your API keys
 
-This is our standard development setup. It provides:
+# 3. Start everything
+make up
 
-- Maximum consistency with production
-- One-command setup process
-- Clean, isolated environment
-- Simplified CI/CD pipeline integration
+# 4. Run initial data ingestion
+make ingest
 
-#### Setup Steps
+# 5. Verify system
+curl http://localhost:8000/health
+```
 
-1. Clone the repository:
+**Your development environment is now running!**
 
-   ```bash
-   git clone https://github.com/your-org/chatbot-api-service.git
-   cd chatbot-api-service
-   ```
+- **API**: <http://localhost:8000>
+- **API Docs**: <http://localhost:8000/docs>
+- **Langfuse**: <http://localhost:3000>
 
-2. Copy the environment template:
+## Available Make Commands
 
-   ```bash
-   cp .env.example .env
-   ```
+### System Management
 
-3. Configure your `.env` file with your settings:
+```bash
+make up          # Start all services (recommended)
+make down        # Stop all services
+make logs        # View logs from all containers
+make help        # Show all available commands
+```
 
-   ```env
-   # API Settings
-   API_V1_STR=/api/v1
-   PROJECT_NAME=Charity Policy AI Chatbot
-   BACKEND_CORS_ORIGINS=["http://localhost:8000", "http://localhost:3000"]
+### Development
 
-   # OpenRouter API
-   OPENROUTER_API_KEY=your-api-key
-   
-   # PostgreSQL
-   POSTGRES_SERVER=postgres
-   POSTGRES_USER=postgres
-   POSTGRES_PASSWORD=postgres
-   POSTGRES_DB=app
-   
-   # Redis
-   REDIS_HOST=redis
-   REDIS_PORT=6379
-   ```
+```bash
+make shell       # Open bash shell in app container
+make test        # Run all tests (7 tests should pass)
+make test-cov    # Run tests with coverage report
+make lint        # Check code quality with ruff
+make format      # Format code with ruff
+```
 
-4. Start the development environment:
+### Database Operations
 
-   ```bash
-   docker-compose up --build
-   ```
+```bash
+make db-shell    # Open PostgreSQL shell
+make ingest      # Run data ingestion (index PDF documents)
+```
 
-The API will be available at `http://localhost:8000`.
+### Maintenance
 
-#### Development Workflow
+```bash
+make clean       # Remove all containers and volumes
+make clean-pyc   # Remove Python cache files
+```
 
-1. **Code Changes**: Edit code in your local IDE. Changes are automatically synced to the container and trigger a reload.
+## Environment Configuration
 
-2. **Dependency Updates**: If you add new dependencies:
+### Required Environment Variables
 
-   ```bash
-   # Update requirements.in
-   docker-compose exec app pip-compile requirements.in
-   docker-compose up --build  # Rebuild with new dependencies
-   ```
+Edit `.env` with your actual API keys:
 
-3. **Database Migrations**: Run through Docker:
+```env
+# Database (automatically configured for Docker)
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/app
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=app
 
-   ```bash
-   docker-compose exec app alembic revision --autogenerate -m "description"
-   docker-compose exec app alembic upgrade head
-   ```
+# OpenRouter API (REQUIRED - Get from openrouter.ai)
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+LLM_MODEL_NAME=google/gemini-1.5-pro-latest
 
-4. **Running Tests**: Execute in the container:
+# Langfuse Observability (REQUIRED - Get from langfuse.com)
+LANGFUSE_PUBLIC_KEY=your_langfuse_public_key_here
+LANGFUSE_SECRET_KEY=your_langfuse_secret_key_here
+LANGFUSE_HOST=http://langfuse:3000
 
-   ```bash
-   docker-compose exec app pytest
-   ```
+# Application Security (REQUIRED - Generate strong random keys)
+API_KEY=your_very_strong_api_key_here
+ADMIN_API_KEY=your_admin_api_key_here
 
-### Option 2: Local Python with Docker Services
+# Langfuse Service Configuration
+NEXTAUTH_SECRET=your_strong_nextauth_secret_here
+SALT=your_strong_salt_here
+```
 
-For developers who prefer running the Python application locally:
+### Optional Settings
 
-1. Create a conda environment:
+```env
+DEBUG=true
+ENVIRONMENT=development
+LOG_LEVEL=INFO
+PDF_DOCUMENTS_DIR=pdf_documents
+```
 
-   ```bash
-   conda create -n chatbot python=3.11
-   conda activate chatbot
-   ```
+## Docker Services
 
-2. Install dependencies:
+### Current Stack
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+- **FastAPI Application**: Main API server with live reload
+- **PostgreSQL + pgvector**: Database with vector similarity search
+- **Redis**: In-memory cache for session management
+- **Langfuse**: LLM observability and tracing
 
-3. Start supporting services:
+### Service Health Checks
 
-   ```bash
-   docker-compose up postgres redis
-   ```
+All services include health checks and dependency management:
 
-4. Run the application:
-
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-
-### Option 3: Fully Local Setup (Not Recommended)
-
-Only for situations where Docker cannot be used. Requires manual setup of PostgreSQL and Redis.
-
-## Docker Configuration Details
-
-### Key Components
-
-Our `docker-compose.yml` sets up:
-
-- FastAPI application with live reload
-- PostgreSQL with pgvector
-- Redis for rate limiting
-- Volumes for code and data persistence
+- PostgreSQL: `pg_isready` check
+- Redis: `redis-cli ping` check
+- App: Depends on healthy database and cache
 
 ### Volume Mappings
 
 - `./app:/app/app`: Live code reloading
-- `./pdf_documents:/app/pdf_documents`: PDF document storage
-- `postgres_data:/var/lib/postgresql/data`: Database persistence
-- `redis_data:/data`: Redis persistence
+- `./pdf_documents:/app/pdf_documents`: Document storage
+- `./tests:/app/tests`: Test directory
+- Database and Redis data persisted in named volumes
 
-### Network Configuration
+## Development Workflow
 
-- FastAPI: Port 8000
-- PostgreSQL: Port 5432
-- Redis: Port 6379
+### 1. Daily Development
 
-## Best Practices
+```bash
+# Start your dev session
+make up
 
-1. **Always Use Docker Compose**
-   - Ensures consistent environment
-   - Manages service dependencies
-   - Simplifies commands
+# View logs if needed
+make logs
 
-2. **Environment Variables**
-   - Never commit `.env` files
-   - Use `.env.example` as a template
-   - Document all environment variables
+# Run tests after changes
+make test
 
-3. **Database Migrations**
-   - Always run migrations through Docker
-   - Keep migration messages descriptive
-   - Test migrations locally before committing
+# Format and lint code
+make format
+make lint
+```
 
-4. **Dependency Management**
-   - Use `requirements.in` for direct dependencies
-   - Generate `requirements.txt` with `pip-compile`
-   - Rebuild containers after dependency changes
+### 2. Adding New Features
 
-5. **Troubleshooting**
-   - Check logs: `docker-compose logs -f [service]`
-   - Rebuild: `docker-compose up --build`
-   - Clean start: `docker-compose down -v && docker-compose up --build`
+```bash
+# Create feature branch
+git checkout -b feat/your-feature-name
 
-## Common Issues and Solutions
+# Make changes, then test
+make test
+make lint
 
-1. **Port Conflicts**
+# Commit with conventional commits
+git commit -m "feat(scope): add new feature"
+```
+
+### 3. Working with Dependencies
+
+```bash
+# Add new dependency to requirements.in
+echo "new-package" >> requirements.in
+
+# Compile new requirements.txt
+make shell
+pip-compile requirements.in
+exit
+
+# Rebuild container with new dependencies
+make down
+make up
+```
+
+### 4. Database Operations
+
+```bash
+# Access database shell
+make db-shell
+
+# Re-run data ingestion
+make ingest
+
+# Check database tables
+make db-shell
+\dt  # List tables
+\d charity_policies  # Describe vector table
+```
+
+### 5. Debugging
+
+```bash
+# View all service logs
+make logs
+
+# View specific service logs
+docker-compose logs app
+docker-compose logs postgres
+
+# Access app container for debugging
+make shell
+python  # Interactive Python
+```
+
+## Testing & Quality Assurance
+
+### Running Tests
+
+```bash
+# Run all tests (should show 7/7 passing)
+make test
+
+# Run with coverage report
+make test-cov
+
+# Expected output: 35% coverage, all tests passing
+```
+
+### Code Quality
+
+```bash
+# Format code
+make format
+
+# Check linting (should pass cleanly)
+make lint
+```
+
+### Pre-commit Hooks
+
+The repository includes comprehensive pre-commit hooks:
+
+- **Code formatting** with Ruff
+- **Security scanning** with Gitleaks
+- **Markdown linting**
+- **YAML/TOML validation**
+- **Conventional commit enforcement**
+
+Install hooks: `pre-commit install`
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Services Won't Start**
 
    ```bash
-   # Error: port already in use
-   sudo lsof -i :8000  # Find process using port
-   kill -9 <PID>       # Kill process if needed
+   # Check what's using ports
+   lsof -i :8000
+   lsof -i :5432
+   
+   # Clean restart
+   make down
+   docker system prune -f
+   make up
    ```
 
-2. **Permission Issues**
+2. **Database Connection Issues**
 
    ```bash
-   # Fix ownership of generated files
+   # Verify PostgreSQL is healthy
+   docker-compose ps
+   
+   # Check database logs
+   docker-compose logs postgres
+   
+   # Recreate database
+   make down
+   docker volume rm chatbot-api-service_postgres_data
+   make up
+   make ingest
+   ```
+
+3. **Ingestion Fails**
+
+   ```bash
+   # Check if pgvector extension is enabled
+   make db-shell
+   SELECT * FROM pg_extension WHERE extname = 'vector';
+   
+   # Re-enable if needed
+   CREATE EXTENSION IF NOT EXISTS vector;
+   ```
+
+4. **Permission Issues**
+
+   ```bash
+   # Fix file ownership
    sudo chown -R $USER:$USER .
+   
+   # Fix Docker permissions
+   docker-compose down
+   docker-compose up
    ```
 
-3. **Container Won't Start**
+### Health Check Commands
 
-   ```bash
-   # Check logs
-   docker-compose logs app
-   # Rebuild
-   docker-compose up --build
-   ```
+```bash
+# API health
+curl http://localhost:8000/health
 
-## IDE Setup
+# Database connection
+make db-shell -c "SELECT 1;"
 
-### VS Code Configuration
+# Redis connection  
+docker-compose exec redis redis-cli ping
 
-Recommended extensions:
+# All services status
+docker-compose ps
+```
+
+## Performance Tips
+
+1. **Use Make Commands**: Always prefer `make up` over `docker-compose up -d`
+2. **Volume Optimization**: Use named volumes for better performance
+3. **Resource Limits**: Adjust Docker Desktop memory allocation if needed
+4. **Cleanup Regularly**: Run `make clean` occasionally to free space
+
+## IDE Integration
+
+### VS Code Setup
+
+Install recommended extensions:
 
 - Python
 - Docker
-- Remote Containers
 - GitLens
+- Ruff (Python linting/formatting)
 
-Settings for optimal development:
+### Configuration
 
-```json
-{
-    "python.linting.enabled": true,
-    "python.linting.ruffEnabled": true,
-    "editor.formatOnSave": true,
-    "editor.codeActionsOnSave": {
-        "source.organizeImports": true
-    }
-}
-```
+The repository includes:
 
-## Continuous Integration
+- `.vscode/settings.json` for consistent formatting
+- `pyproject.toml` for tool configuration
+- `.pre-commit-config.yaml` for automated quality checks
 
-Our Docker setup integrates seamlessly with CI/CD:
+## Deployment Preparation
 
-```yaml
-# Example GitHub Actions workflow
-name: CI
+The development environment matches production deployment:
 
-on: [push, pull_request]
+- Same Docker images and configurations
+- Environment-based configuration
+- Health checks for orchestration
+- Comprehensive logging
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Build and test
-        run: |
-          docker-compose -f docker-compose.yml up -d
-          docker-compose exec -T app pytest
-```
+This ensures smooth deployment and debugging of production issues locally.
