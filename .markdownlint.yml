@@ -1,0 +1,9 @@
+---
+# Markdownlint configuration
+# See https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+default: true
+line_length: false  # MD013 - Disable line length restrictions for better readability
+no-duplicate-heading:
+  siblings_only: true  # MD024 - Allow duplicate headings in different sections
+fenced-code-language: false  # MD040 - Allow code blocks without language specification

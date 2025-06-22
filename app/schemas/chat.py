@@ -1,5 +1,3 @@
-from typing import List, Optional
-
 from pydantic import BaseModel
 
 
@@ -10,7 +8,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
-    chat_history: Optional[List[Message]] = None
+    chat_history: list[Message] | None = None
 
 
 class ChatResponse(BaseModel):

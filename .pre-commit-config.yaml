@@ -1,19 +1,79 @@
+---
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+# It is recommended to run `pre-commit autoupdate` periodically
+# to keep hooks up to date.
+
 repos:
+  # ===================================================================
+  # 1. Python Code Quality (Linting, Formatting, Syntax)
+  # ===================================================================
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.11.13
+    rev: v0.12.0
     hooks:
-      # Run the linter.
+      # Run the linter, with auto-fixing enabled.
       - id: ruff
-        types_or: [ python, pyi, jupyter ]
-        args: [ --fix ]
+        types_or: [python, pyi, jupyter]
+        args: [--fix]
       # Run the formatter.
       - id: ruff-format
-        types_or: [ python, pyi, jupyter ]
+        types_or: [python, pyi, jupyter]
+
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.20.0
+    hooks:
+      - id: pyupgrade
+        args: [--py310-plus]  # Target your project's minimum Python version
+
+  # ===================================================================
+  # 2. Jupyter Notebook Quality
+  # ===================================================================
+  - repo: https://github.com/nbQA-dev/nbqa
+    rev: 1.9.1
+    hooks:
+      - id: nbqa-ruff
+        additional_dependencies: ["ruff==0.12.0"]  # Match the ruff version above
+        args: [--fix]
+
+  # ===================================================================
+  # 3. Security Scanning (Secrets & Vulnerabilities)
+  # ===================================================================
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.27.2
+    hooks:
+      - id: gitleaks
+        name: Detect hardcoded secrets
+
+  # ===================================================================
+  # 4. Documentation & Text Quality (Markdown, Typos)
+  # ===================================================================
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.18.1
+    hooks:
+      - id: markdownlint-cli2
+        name: Lint Markdown files
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        name: Check for common typos
+        args:
+          # Add "bu" (lowercase) and "Bu" (uppercase) to ignore list for Turkish
+          - --ignore-words-list=aeu,ba,caf,datas,emreusta,te,thist,sur,ser,nin,bu,Bu,anormal,normal
+          - --skip="*.csv,*.json,*.lock"
+        # Exclude the data directory and notebooks from typo checks
+        exclude: ^data/|.*\.ipynb$
+
+  # ===================================================================
+  # 5. General File & Config Quality (YAML, TOML, etc.)
+  # ===================================================================
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: check-yaml
+        args: [--allow-multiple-documents]
       - id: check-toml
       - id: check-json
       - id: end-of-file-fixer
@@ -22,4 +82,28 @@ repos:
         types: [file, python]
       - id: mixed-line-ending
       - id: check-added-large-files
-        args: [--maxkb=4096]
+        args: [--maxkb=4096]  # 4MB limit for new files
+      - id: check-merge-conflict
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        name: Lint YAML files for style and syntax
+        # Disable line-length checks for YAML files (for long prompts)
+        args:
+          - -d
+          - "{extends: default, rules: {line-length: disable}}"
+
+  # ===================================================================
+  # 6. Commit Message Linting (Conventional Commits)
+  # ===================================================================
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.8.3
+    hooks:
+      - id: commitizen
+        name: Check commit message conforms to conventional commits
+        stages: [commit-msg]
+      - id: commitizen-branch
+        name: Check branch name is valid
+        stages: [pre-push]
