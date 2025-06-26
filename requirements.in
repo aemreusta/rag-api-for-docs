@@ -17,3 +17,4 @@ pre-commit
 ruff
 pytest
 reportlab
+alembic
