@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1 import chat
 from app.core.config import settings
 
 app = FastAPI(
@@ -29,7 +30,5 @@ def health_check():
     return {"status": "ok", "environment": settings.ENVIRONMENT, "version": app.version}
 
 
-# Placeholder for future routers
-# from app.api.v1 import chat, admin
-# app.include_router(chat.router, prefix="/api/v1")
-# app.include_router(admin.router, prefix="/api/v1/admin")
+# Include API routers
+app.include_router(chat.router, prefix="/api/v1")
