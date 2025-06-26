@@ -1,7 +1,9 @@
 from langfuse.client import Langfuse
-from llama_index import ServiceContext, StorageContext, VectorStoreIndex
+from llama_index import ServiceContext, StorageContext
+from llama_index.core import VectorStoreIndex
+from llama_index.core.chat_engine import CondenseQuestionChatEngine
 from llama_index.embeddings import OpenAIEmbedding
-from llama_index.llms import OpenAI
+from llama_index.llms.openrouter import OpenRouter
 from llama_index.vector_stores import PGVectorStore
 
 from app.core.config import settings
@@ -18,18 +20,13 @@ class QueryEngine:
 
         # Setup vector store
         self.vector_store = PGVectorStore.from_params(
-            database=settings.POSTGRES_DB,
-            host=settings.POSTGRES_SERVER,
-            password=settings.POSTGRES_PASSWORD,
-            port=5432,
-            user=settings.POSTGRES_USER,
-            table_name="document_vectors",
-            embed_dim=1536,  # OpenAI embedding dimension
+            dsn=str(settings.DATABASE_URL),
+            table_name="content_embeddings",
         )
 
         # Setup LlamaIndex components
         self.embed_model = OpenAIEmbedding()
-        self.llm = OpenAI(temperature=0.1)
+        self.llm = OpenRouter(api_key=settings.OPENROUTER_API_KEY, model=settings.LLM_MODEL_NAME)
 
         # Create service context
         self.service_context = ServiceContext.from_defaults(
@@ -41,9 +38,12 @@ class QueryEngine:
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
 
         # Create index
-        self.index = VectorStoreIndex.from_vector_store(
-            vector_store=self.vector_store,
-            service_context=self.service_context,
+        self.index = VectorStoreIndex.from_vector_store(vector_store=self.vector_store)
+
+        # Create a ChatEngine for conversational context
+        self.chat_engine = CondenseQuestionChatEngine.from_defaults(
+            retriever=self.index.as_retriever(),
+            llm=self.llm,
         )
 
     async def query(self, query_text: str, chat_history: list | None = None) -> str:
@@ -51,15 +51,9 @@ class QueryEngine:
         trace = self.langfuse.trace(name="query")
 
         try:
-            # Create query engine
-            query_engine = self.index.as_query_engine(
-                streaming=False,
-                similarity_top_k=3,
-            )
-
             # Execute query and track with Langfuse
             with trace.span(name="query_execution"):
-                response = query_engine.query(query_text)
+                response = self.chat_engine.chat(query_text)
 
             trace.end()
             return str(response)
@@ -72,3 +66,10 @@ class QueryEngine:
 
 # Create a global instance
 query_engine = QueryEngine()
+
+
+def get_chat_response(question: str, session_id: str):
+    # NOTE: For now, session_id is a placeholder. Real memory will be added in Phase 3.
+    # This engine will internally condense the question but doesn't have persistent memory yet.
+    response = query_engine.chat_engine.chat(question)
+    return response
