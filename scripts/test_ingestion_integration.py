@@ -127,40 +127,40 @@ def run_ingestion_test():
         return False
 
 
-def check_ingestion_results():
-    """Check if data was actually ingested into the database."""
+def check_data_ingestion():
+    """Check if data has been successfully ingested into the database."""
     try:
         conn = psycopg2.connect(settings.DATABASE_URL)
         cur = conn.cursor()
 
-        # Check if the table exists
+        # Check if the content_embeddings table exists and has data
         cur.execute("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_name = 'charity_policies'
-            );
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_name = 'content_embeddings'
         """)
-        table_exists = cur.fetchone()[0]
+        table_exists = cur.fetchone()[0] > 0
 
         if not table_exists:
-            logger.error("❌ Table 'charity_policies' does not exist")
+            logger.error("❌ content_embeddings table does not exist")
             conn.close()
             return False
 
-        # Check if there are any records
-        cur.execute("SELECT COUNT(*) FROM charity_policies;")
-        count = cur.fetchone()[0]
-        conn.close()
+        # Check if there's data in the table
+        cur.execute("SELECT COUNT(*) FROM content_embeddings")
+        row_count = cur.fetchone()[0]
 
-        if count > 0:
-            logger.info(f"✅ Found {count} records in charity_policies table")
-            return True
-        else:
-            logger.error("❌ No records found in charity_policies table")
+        if row_count == 0:
+            logger.warning("⚠️  content_embeddings table exists but is empty")
+            logger.info("   Run 'make ingest' to populate the database")
+            conn.close()
             return False
 
+        logger.info(f"✅ Data ingestion successful: {row_count} rows in content_embeddings table")
+        conn.close()
+        return True
+
     except Exception as e:
-        logger.error(f"❌ Error checking ingestion results: {e}")
+        logger.error(f"❌ Database check failed: {e}")
         return False
 
 
@@ -189,7 +189,7 @@ def main():
         sys.exit(1)
 
     # Verify results
-    if not check_ingestion_results():
+    if not check_data_ingestion():
         logger.error("❌ Integration test failed during result verification")
         sys.exit(1)
 
