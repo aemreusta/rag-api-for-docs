@@ -322,3 +322,43 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Repository Topics
+
+This repository is tagged with the following topics to make it more discoverable:
+
+### Core Technologies
+
+- Python
+- FastAPI
+- LlamaIndex
+- Langfuse
+- PostgreSQL
+- pgvector
+- Docker
+- API
+
+### AI/ML Concepts
+
+- RAG (Retrieval-Augmented Generation)
+- Chatbot
+- LLM (Large Language Models)
+- Generative AI
+- NLP (Natural Language Processing)
+
+### Professional Practices
+
+- LLMOps
+- Observability
+
+### Problem Domain
+
+- Non-Profit
+- Charity
+
+These topics help make the repository more discoverable for developers looking for examples of:
+
+- LlamaIndex implementation with FastAPI
+- Langfuse integration for LLM observability
+- RAG applications for specific domains
+- Production-ready AI chatbot implementations
