@@ -1,11 +1,15 @@
-from fastapi import Header, HTTPException
+from fastapi import HTTPException, Security, status
+from fastapi.security import APIKeyHeader
 
 from app.core.config import settings
 
+api_key_header = APIKeyHeader(name="X-API-Key")
 
-async def verify_api_key(
-    x_api_key: str = Header(..., description="API Key for authentication"),
-) -> str:
-    if x_api_key != settings.API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid API Key")
-    return x_api_key
+
+def get_api_key(key: str = Security(api_key_header)):
+    if key == settings.API_KEY:
+        return key
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or missing API Key",
+    )

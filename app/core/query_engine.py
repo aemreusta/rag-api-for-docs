@@ -1,74 +1,40 @@
-from langfuse.client import Langfuse
-from llama_index import ServiceContext, StorageContext, VectorStoreIndex
-from llama_index.embeddings import OpenAIEmbedding
-from llama_index.llms import OpenAI
-from llama_index.vector_stores import PGVectorStore
+from llama_index.core import Settings, VectorStoreIndex
+from llama_index.core.chat_engine import CondenseQuestionChatEngine
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.llms.openrouter import OpenRouter
+from llama_index.vector_stores.postgres import PGVectorStore
 
 from app.core.config import settings
 
+# Set up the embedding model first
+embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
+Settings.embed_model = embed_model
 
-class QueryEngine:
-    def __init__(self):
-        # Initialize Langfuse for tracking
-        self.langfuse = Langfuse(
-            public_key=settings.LANGFUSE_PUBLIC_KEY,
-            secret_key=settings.LANGFUSE_SECRET_KEY,
-            host=settings.LANGFUSE_HOST,
-        )
+# Initialize components
+vector_store = PGVectorStore.from_params(
+    database=settings.POSTGRES_DB,
+    host=settings.POSTGRES_SERVER,
+    password=settings.POSTGRES_PASSWORD,
+    port=5432,
+    user=settings.POSTGRES_USER,
+    table_name="content_embeddings",
+    embed_dim=384,  # Match the content_embeddings table vector dimension
+)
+index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
+llm = OpenRouter(api_key=settings.OPENROUTER_API_KEY, model=settings.LLM_MODEL_NAME)
 
-        # Setup vector store
-        self.vector_store = PGVectorStore.from_params(
-            database=settings.POSTGRES_DB,
-            host=settings.POSTGRES_SERVER,
-            password=settings.POSTGRES_PASSWORD,
-            port=5432,
-            user=settings.POSTGRES_USER,
-            table_name="document_vectors",
-            embed_dim=1536,  # OpenAI embedding dimension
-        )
+# Create a query engine first
+query_engine = index.as_query_engine(llm=llm)
 
-        # Setup LlamaIndex components
-        self.embed_model = OpenAIEmbedding()
-        self.llm = OpenAI(temperature=0.1)
-
-        # Create service context
-        self.service_context = ServiceContext.from_defaults(
-            llm=self.llm,
-            embed_model=self.embed_model,
-        )
-
-        # Initialize storage context
-        self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
-
-        # Create index
-        self.index = VectorStoreIndex.from_vector_store(
-            vector_store=self.vector_store,
-            service_context=self.service_context,
-        )
-
-    async def query(self, query_text: str, chat_history: list | None = None) -> str:
-        # Create a Langfuse trace for monitoring
-        trace = self.langfuse.trace(name="query")
-
-        try:
-            # Create query engine
-            query_engine = self.index.as_query_engine(
-                streaming=False,
-                similarity_top_k=3,
-            )
-
-            # Execute query and track with Langfuse
-            with trace.span(name="query_execution"):
-                response = query_engine.query(query_text)
-
-            trace.end()
-            return str(response)
-
-        except Exception as e:
-            trace.error(error=str(e))
-            trace.end()
-            raise e
+# Create a ChatEngine for conversational context
+chat_engine = CondenseQuestionChatEngine.from_defaults(
+    query_engine=query_engine,
+    llm=llm,
+)
 
 
-# Create a global instance
-query_engine = QueryEngine()
+def get_chat_response(question: str, session_id: str):
+    # NOTE: For now, session_id is a placeholder. Real memory will be added in Phase 3.
+    # This engine will internally condense the question but doesn't have persistent memory yet.
+    response = chat_engine.chat(question)
+    return response
