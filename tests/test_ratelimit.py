@@ -1,4 +1,9 @@
-import fakeredis.aioredis
+# fakeredis >=2.0 renamed "fakeredis.aioredis" to "fakeredis.asyncio".
+# Import using the new path but fall back to the old one for compatibility.
+try:
+    import fakeredis.asyncio as fakeredis  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover – back-compat with <2.x
+    import fakeredis.aioredis as fakeredis  # type: ignore
 import pytest
 from fastapi import Request
 from starlette.exceptions import HTTPException
@@ -12,7 +17,7 @@ pytestmark = pytest.mark.asyncio
 @pytest.fixture
 def fake_redis():
     """Fixture to provide a fake redis client for testing."""
-    return fakeredis.aioredis.FakeRedis()
+    return fakeredis.FakeRedis()
 
 
 @pytest.fixture

@@ -9,3 +9,7 @@ nbqa
 codespell
 yamllint
 commitizen
+pytest
+pytest-cov
+pytest-asyncio
+ipython

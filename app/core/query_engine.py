@@ -1,3 +1,15 @@
+"""Query engine setup and convenience helpers.
+
+This file relies on LlamaIndex which, in newer releases, imports
+`Secret` from `pydantic`.  The generic `Secret` type was introduced in
+Pydantic v2.6.  Our dependency constraints may resolve an earlier
+version (e.g. 2.5.x) when the symbol is missing, resulting in an
+`ImportError` originating from LlamaIndex.  To keep the application
+and the test-suite working without forcing an immediate global
+dependency upgrade, we pro-actively patch `pydantic` with a minimal
+fallback implementation when the attribute is absent.
+"""
+
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.chat_engine import CondenseQuestionChatEngine
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding

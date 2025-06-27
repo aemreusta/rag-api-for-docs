@@ -10,21 +10,11 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pip-tools for dependency management
-RUN pip install --no-cache-dir pip-tools
+# copy *both* lock-files before install to keep the cache
+COPY requirements*.txt ./
 
-# Copy requirements first to leverage Docker cache
-COPY requirements.in requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Install development tools
-RUN pip install --no-cache-dir \
-    black \
-    ruff \
-    pytest \
-    pytest-cov \
-    pytest-asyncio \
-    ipython
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir -r requirements-dev.txt
 
 # Create necessary directories
 RUN mkdir -p pdf_documents
