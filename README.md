@@ -36,6 +36,7 @@ curl http://localhost:8000/health
 - **AI Gateway**: <http://localhost:8080>
 - **Langfuse UI**: <http://localhost:3000>
 - **ClickHouse**: <http://localhost:8123>
+- **MinIO Console**: <http://localhost:9091> (S3 storage)
 
 ## 🎯 Purpose
 
@@ -99,6 +100,7 @@ Docker Compose file spins up:
 - `postgres:15` + `pgvector extension`
 - `redis:7`
 - `clickhouse/clickhouse-server:24.3`
+- `minio` (S3-compatible storage for Langfuse v3)
 - `langfuse` & `langfuse-worker` (image `ghcr.io/langfuse/langfuse:latest`)
 
 ## 🛠 Available Commands
@@ -193,45 +195,40 @@ cp .env.example .env
 
 Edit `.env` and replace placeholder values:
 
-#### Mandatory Environment Variables
+#### Critical Environment Variables
+
+**⚠️ BREAKING CHANGE**: Langfuse v3 requires S3 storage configuration. Without it, you'll get crashes.
 
 | Key | Sample value | Notes |
 |-----|--------------|--------|
-| `NEXTAUTH_URL` | `http://localhost:3000` | Langfuse auth callback |
-| `NEXTAUTH_SECRET` | `<32-hex>` | Run `openssl rand -hex 32` |
-| `CLICKHOUSE_USER` | `langfuse` | Created at boot |
-| `CLICKHOUSE_PASSWORD` | `<32-hex>` | Same in Compose & .env |
-| `CLICKHOUSE_DB` | `langfuse` | Isolated OLAP DB |
-| `DATABASE_URL` | `postgresql://app:pw@postgres/appdb` | App database |
-| `LANGFUSE_DATABASE_URL` | `postgresql://lf:pw@postgres/lfdb` | Langfuse metadata |
+| `NEXTAUTH_SECRET` | `<32-hex>` | **REQUIRED**: `openssl rand -hex 32` |
+| `SALT` | `<32-hex>` | **REQUIRED**: `openssl rand -hex 32` |
+| `ENCRYPTION_KEY` | `<32-hex>` | **REQUIRED**: `openssl rand -hex 32` |
+| `CLICKHOUSE_PASSWORD` | `<32-hex>` | **REQUIRED**: `openssl rand -hex 32` |
+| `LANGFUSE_S3_EVENT_UPLOAD_BUCKET` | `langfuse` | **REQUIRED**: MinIO bucket name |
+| `MINIO_ROOT_PASSWORD` | `miniosecret` | **REQUIRED**: Strong password |
+
+#### Step-by-step .env Configuration
 
 ```bash
-# Required: Add your actual API keys
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-LANGFUSE_PUBLIC_KEY=your_langfuse_public_key_here  
-LANGFUSE_SECRET_KEY=your_langfuse_secret_key_here
+# 1. Copy the template
+cp .env.example .env
 
-# Required: Generate strong random keys
-API_KEY=your_very_strong_api_key_here
-ADMIN_API_KEY=your_admin_api_key_here
-NEXTAUTH_SECRET=your_strong_nextauth_secret_here
-SALT=your_strong_salt_here
+# 2. Generate required secrets (CRITICAL - run these 4 commands)
+echo "NEXTAUTH_SECRET=$(openssl rand -hex 32)" >> .env
+echo "SALT=$(openssl rand -hex 32)" >> .env  
+echo "ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env
+echo "CLICKHOUSE_PASSWORD=$(openssl rand -hex 32)" >> .env
 
-# ClickHouse Configuration
-CLICKHOUSE_USER=langfuse
-CLICKHOUSE_PASSWORD=your_clickhouse_password_here
-CLICKHOUSE_DB=langfuse
-CLICKHOUSE_HOST=clickhouse
-CLICKHOUSE_PORT=9000
-CLICKHOUSE_CLUSTER=default
+# 3. Add your LLM provider API key
+echo "OPENROUTER_API_KEY=your_actual_openrouter_key" >> .env
 
-# Email Configuration (Amazon SES)
-SMTP_HOST=email-smtp.us-east-1.amazonaws.com
-SMTP_PORT=587
-SMTP_USER=your_ses_smtp_user
-SMTP_PASS=your_ses_smtp_password
-FROM_EMAIL=ai@gencturkler.co
+# 4. Set strong passwords for MinIO and Redis
+sed -i 's/miniosecret/your_strong_minio_password/' .env
+sed -i 's/myredissecret/your_strong_redis_password/' .env
 ```
+
+All other variables have sensible defaults for local development.
 
 ### 3. Add Your Documents
 
@@ -401,8 +398,11 @@ make chat
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
+| `ZodError: LANGFUSE_S3_EVENT_UPLOAD_BUCKET expected string` | Missing S3 env vars | Follow step 2 above to configure .env properly |
+| `TypeError: Cannot set property message of ZodError` | Same S3 issue | Same fix + `docker compose restart langfuse langfuse-worker` |
 | "Authentication failed" in Langfuse logs | Password mismatch | Ensure `CLICKHOUSE_PASSWORD` identical in both services |
-| Worker & web race on migrations | Missing env `LANGFUSE_AUTO_CLICKHOUSE_MIGRATION_DISABLED:true` | Add to worker env |
+| `getaddrinfo ENOTFOUND minio` | MinIO not ready | Wait for MinIO healthcheck: `docker compose logs minio` |
+| Worker & web race on migrations | Missing env var | Ensure `LANGFUSE_AUTO_CLICKHOUSE_MIGRATION_DISABLED=true` in worker |
 | Chat widget 404 | Cloudflare cache or wrong subdomain | Purge cache; check DNS `gateway.hurriyetpartisi.org` |
 | UI e-mail rejects address | Must include `@` | Use `admin@example.com` not `admin` |
 | ClickHouse connection failed | Service not ready | Wait for ClickHouse to fully start before running migrations |
