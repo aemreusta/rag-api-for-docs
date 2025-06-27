@@ -10,6 +10,7 @@ codespell
 yamllint
 commitizen
 pytest
+pytest-httpx
 pytest-cov
 pytest-asyncio
 ipython
