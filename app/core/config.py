@@ -6,9 +6,17 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str
 
-    # LLM Provider
+    # LLM Provider Configuration
     OPENROUTER_API_KEY: str
+    GROQ_API_KEY: str = ""  # Optional
+    OPENAI_API_KEY: str = ""  # Optional
+    GOOGLE_AI_STUDIO_API_KEY: str = ""  # Optional
+    LOCAL_LLM_PATH: str = ""  # Optional
     LLM_MODEL_NAME: str = "google/gemini-1.5-pro-latest"
+
+    # LLM Router Configuration
+    LLM_TIMEOUT_SECONDS: int = 30
+    LLM_FALLBACK_CACHE_SECONDS: int = 300  # 5 minutes
 
     # Langfuse Observability
     LANGFUSE_PUBLIC_KEY: str

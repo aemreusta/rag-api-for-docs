@@ -4,6 +4,8 @@ python-dotenv
 langfuse
 llama-index
 llama-index-llms-openrouter
+llama-index-llms-openai
+groq
 llama-index-vector-stores-postgres
 llama-index-embeddings-huggingface
 llama-index-callbacks-langfuse

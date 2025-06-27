@@ -62,6 +62,7 @@ Browser → WP Script ↔ ai-gateway ↔ RAG API ↔ LLMs
 - **Multilingual Support:** Turkish and English prompt templates for bilingual audience
 - **High-Accuracy RAG:** Leverages **LlamaIndex** for state-of-the-art data ingestion, indexing, and retrieval from PDF documents
 - **AI Gateway:** Single entry-point with load balancing across multiple LLM providers
+- **LLM Router:** Priority-based LLM provider routing with automatic fallback on errors (timeout, rate limit, auth failures)
 - **Conversational Memory:** The chatbot remembers conversation context using Redis
 - **Production-Grade API:** Built with **FastAPI** for high performance, automatic data validation, and interactive documentation
 - **Rate Limiting:** Per-IP rate limiting using **Redis** protects the API from abuse and controls operational costs
@@ -144,6 +145,7 @@ ai-gateway/
 │   │   └── admin.py             # Admin endpoints
 │   ├── core/                    # Core configuration
 │   │   ├── config.py            # Environment & settings
+│   │   ├── llm_router.py        # LLM provider routing & fallback
 │   │   └── query_engine.py      # LlamaIndex integration
 │   ├── schemas/                 # Pydantic models
 │   └── main.py                  # Application entry point
@@ -200,6 +202,10 @@ Edit `.env` and replace placeholder values:
 | `LANGFUSE_S3_EVENT_UPLOAD_BUCKET` | `langfuse` | **REQUIRED**: MinIO bucket name |
 | `MINIO_ROOT_PASSWORD` | `miniosecret` | **REQUIRED**: Strong password |
 | `REDIS_AUTH` | `myredissecret` | **REQUIRED**: Strong password |
+| `OPENROUTER_API_KEY` | `your_key` | For OpenRouter/Gemini access |
+| `GROQ_API_KEY` | `your_key` | For Groq/Llama3 access |
+| `OPENAI_API_KEY` | `your_key` | For OpenAI/ChatGPT access |
+| `LLM_MODEL_NAME` | `google/gemini-1.5-pro-latest` | Default model name |
 
 #### Step-by-step .env Configuration
 

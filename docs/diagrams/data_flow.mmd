@@ -6,13 +6,18 @@ graph TD
     subgraph "Backend Infrastructure (Docker)"
         A[FastAPI Application]
         B[LlamaIndex Query Engine]
+        I[LLM Router]
         C[PostgreSQL w/ pgvector]
         D[Redis Rate Limiter]
+        J[Redis Provider Cache]
         G[Structured Logging]
     end
 
     subgraph "External Services & Platforms"
-        E[OpenRouter API]
+        E1[OpenRouter API]
+        E2[Groq API]
+        E3[OpenAI API]
+        E4[Local LLM]
         F[Langfuse Platform]
         H[Log Aggregation<br/>ELK/Loki/OTEL]
     end
@@ -22,10 +27,26 @@ graph TD
     A --"3. Generate<br/>Correlation IDs"--> G;
     A --"4. Query"--> B;
     B --"5. Retrieve Context"--> C;
-    B --"6. Prompt + Context"--> E;
-    A --"7. Send Trace Data<br/>+ trace_id"--> F;
-    B --"8. Send Trace Data<br/>+ trace_id"--> F;
-    E --"9. LLM Response"--> B;
-    B --"10. Final Answer"--> A;
-    A --"11. JSON Response<br/>+ X-Request-ID"--> User;
-    G --"12. JSON Logs<br/>+ Correlation IDs"--> H; 
+    B --"6. Prompt + Context"--> I;
+    I --"7. Check Provider Status"--> J;
+    
+    I --"8a. Primary Provider"--> E1;
+    I --"8b. Fallback Provider"--> E2;
+    I --"8c. Fallback Provider"--> E3;
+    I --"8d. Fallback Provider"--> E4;
+    
+    E1 --"9a. LLM Response"--> I;
+    E2 --"9b. LLM Response"--> I;
+    E3 --"9c. LLM Response"--> I;
+    E4 --"9d. LLM Response"--> I;
+    
+    I --"10. Cache Failed Providers"--> J;
+    I --"11. Final LLM Response"--> B;
+    
+    A --"12. Send Trace Data<br/>+ trace_id"--> F;
+    B --"13. Send Trace Data<br/>+ trace_id"--> F;
+    I --"14. Send Provider Metrics"--> F;
+    
+    B --"15. Final Answer"--> A;
+    A --"16. JSON Response<br/>+ X-Request-ID"--> User;
+    G --"17. JSON Logs<br/>+ Correlation IDs"--> H; 
