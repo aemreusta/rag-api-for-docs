@@ -13,10 +13,10 @@ fallback implementation when the attribute is absent.
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.chat_engine import CondenseQuestionChatEngine
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.llms.openrouter import OpenRouter
 from llama_index.vector_stores.postgres import PGVectorStore
 
 from app.core.config import settings
+from app.core.llm_router import LLMRouter
 
 # Set up the embedding model first
 embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
@@ -33,15 +33,17 @@ vector_store = PGVectorStore.from_params(
     embed_dim=384,  # Match the content_embeddings table vector dimension
 )
 index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
-llm = OpenRouter(api_key=settings.OPENROUTER_API_KEY, model=settings.LLM_MODEL_NAME)
 
-# Create a query engine first
-query_engine = index.as_query_engine(llm=llm)
+# Initialize LLM Router with automatic fallback
+llm_router = LLMRouter()
+
+# Create a query engine with the router
+query_engine = index.as_query_engine(llm=llm_router)
 
 # Create a ChatEngine for conversational context
 chat_engine = CondenseQuestionChatEngine.from_defaults(
     query_engine=query_engine,
-    llm=llm,
+    llm=llm_router,
 )
 
 
