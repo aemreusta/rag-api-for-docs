@@ -17,3 +17,6 @@ unstructured
 reportlab
 alembic
 redis
+async-timeout
+structlog
+python-json-logger

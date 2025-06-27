@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     RATE_LIMIT_COUNT: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 86400  # 24 hours
 
+    # Structured Logging Configuration
+    LOG_LEVEL: str = "INFO"
+    LOG_LEVEL_SQL: str = "WARNING"
+    LOG_JSON: bool = True
+    LOG_TO_FILE: bool = False
+    LOG_FILE: str = "logs/app_%(process)d_%Y%m%d.log"
+
     model_config = ConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore"
     )
