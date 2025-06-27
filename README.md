@@ -271,7 +271,7 @@ curl http://localhost:8000/health
         data-project="hurriyet" data-lang="tr"></script>
 ```
 
-2. The script initializes the floating chat icon and streams responses via SSE.
+1. The script initializes the floating chat icon and streams responses via SSE.
 
 ### Option B – InsertChat Plugin
 
@@ -505,4 +505,6 @@ These topics help make the repository more discoverable for developers looking f
 
 ---
 
-_Last updated 2025-06-27_
+### Last Updated
+
+2025-06-27
