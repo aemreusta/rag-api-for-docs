@@ -73,4 +73,19 @@ clean-pyc: ## Remove Python file artifacts
 	find . -name '*.pyc' -exec rm -f {} +
 	find . -name '*.pyo' -exec rm -f {} +
 	find . -name '*~' -exec rm -f {} +
-	find . -name '__pycache__' -exec rm -fr {} + 
+	find . -name '__pycache__' -exec rm -fr {} +
+
+## ClickHouse & Langfuse
+clickhouse-reset: ## Reset ClickHouse volume (fixes auth issues)
+	docker-compose down
+	docker volume rm chatbot-api-service_clickhouse_data || true
+	docker-compose up -d
+
+clickhouse-test: ## Run ClickHouse smoke tests
+	@echo "Testing ClickHouse authentication..."
+	docker-compose exec clickhouse clickhouse-client -u langfuse --password $(CLICKHOUSE_PASSWORD) -q 'SELECT 1'
+	@echo "Testing Langfuse health..."
+	curl -f http://localhost:3000/api/public/health
+
+langfuse-logs: ## View Langfuse service logs
+	docker-compose logs -f langfuse langfuse-worker clickhouse 

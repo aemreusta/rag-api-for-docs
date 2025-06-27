@@ -1,6 +1,4 @@
 ---
-version: '3.8'
-
 services:
   app:
     build:
@@ -60,24 +58,75 @@ services:
     networks:
       - app-network
 
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    environment:
+      CLICKHOUSE_USER: langfuse
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DB: langfuse
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+    networks:
+      - app-network
+
   langfuse:
-    image: ghcr.io/langfuse/langfuse:latest
+    image: ghcr.io/langfuse/langfuse:2.84.1
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/langfuse
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-your-nextauth-secret}
-      - SALT=${SALT:-your-salt}
+      - DATABASE_URL=${LANGFUSE_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/langfuse}
       - TELEMETRY_ENABLED=false
+      - LANGFUSE_INIT_ORG_ID=my-org
+      - LANGFUSE_INIT_PROJECT_ID=my-project
+      - LANGFUSE_INIT_PROJECT_PUBLIC_KEY=lf_pk_local
+      - LANGFUSE_INIT_PROJECT_SECRET_KEY=lf_sk_local
+      - LANGFUSE_INIT_USER_EMAIL=ai@gencturkler.co
+      - LANGFUSE_INIT_USER_PASSWORD=gencturk123
     depends_on:
       postgres:
         condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  langfuse-worker:
+    image: ghcr.io/langfuse/langfuse:2.84.1
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=${LANGFUSE_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/langfuse}
+      - TELEMETRY_ENABLED=false
+      - LANGFUSE_AUTO_CLICKHOUSE_MIGRATION_DISABLED=true
+      - LANGFUSE_INIT_ORG_ID=my-org
+      - LANGFUSE_INIT_PROJECT_ID=my-project
+      - LANGFUSE_INIT_PROJECT_PUBLIC_KEY=lf_pk_local
+      - LANGFUSE_INIT_PROJECT_SECRET_KEY=lf_sk_local
+      - LANGFUSE_INIT_USER_EMAIL=ai@gencturkler.co
+      - LANGFUSE_INIT_USER_PASSWORD=gencturk123
+    depends_on:
+      langfuse:
+        condition: service_started
     networks:
       - app-network
 
 volumes:
   postgres_data:
   redis_data:
+  clickhouse_data:
+  clickhouse_logs:
 
 networks:
   app-network:
