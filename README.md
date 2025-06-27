@@ -1,8 +1,8 @@
 # AI Gateway Project – Hürriyet Partisi
 
-![Build Status](https://img.shields.io/badge/build-passing-green)
-![Python Version](https://img.shields.io/badge/python-3.11+-blue)
-![License](https://img.shields.io/badge/license-MIT-lightgrey)
+![Build Status](https://img.shields.io/github/actions/workflow/status/gencturkler/ai-gateway/ci.yml?label=build)
+![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)
+![License](https://img.shields.io/github/license/gencturkler/ai-gateway)
 ![Tests](https://img.shields.io/badge/tests-7/7_passing-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-35%25-yellow)
 
@@ -85,7 +85,7 @@ Browser → WP Script ↔ ai-gateway ↔ RAG API ↔ LLMs
 | AI Gateway | Go | High-performance proxy for load balancing across multiple LLM providers |
 | LLM Observability | Langfuse v3 | Purpose-built platform for tracing, debugging, evaluating, and monitoring LLM applications |
 | OLAP Database | ClickHouse 24.3 | High-performance analytical database for Langfuse metrics and analytics |
-| Language | Python 3.11+ | Modern Python with full type hints and async support |
+| Language | Python 3.10+ | Modern Python with full type hints and async support |
 | Primary Database | PostgreSQL w/ pgvector | Robust SQL database with vector similarity search capabilities |
 | In-Memory Datastore | Redis 7 | High-speed key-value store for session management, caching, and rate limiting |
 | Frontend Integration | WordPress | Chat widget integration for public website |
@@ -207,6 +207,7 @@ Edit `.env` and replace placeholder values:
 | `CLICKHOUSE_PASSWORD` | `<32-hex>` | **REQUIRED**: `openssl rand -hex 32` |
 | `LANGFUSE_S3_EVENT_UPLOAD_BUCKET` | `langfuse` | **REQUIRED**: MinIO bucket name |
 | `MINIO_ROOT_PASSWORD` | `miniosecret` | **REQUIRED**: Strong password |
+| `REDIS_AUTH` | `myredissecret` | **REQUIRED**: Strong password |
 
 #### Step-by-step .env Configuration
 
