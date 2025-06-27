@@ -55,11 +55,13 @@ services:
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
-    command: >
-      --requirepass ${REDIS_AUTH:-myredissecret}
-    volumes: [redis_data:/data]
+    command:
+      - --requirepass
+      - ${REDIS_AUTH:-myredissecret}
+    volumes:
+      - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "auth", "${REDIS_AUTH:-myredissecret}", "ping"]
+      test: ["CMD", "redis-cli", "--no-auth-warning", "auth", '${REDIS_AUTH:-myredissecret}', "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -91,7 +93,10 @@ services:
     restart: always
     entrypoint: sh
     # create the 'langfuse' bucket before starting the service
-    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    command:
+      - sh
+      - -c
+      - mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
@@ -124,20 +129,17 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - TELEMETRY_ENABLED=${TELEMETRY_ENABLED:-false}
       - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-true}
-      
       # ClickHouse Configuration
       - CLICKHOUSE_MIGRATION_URL=${CLICKHOUSE_MIGRATION_URL:-clickhouse://clickhouse:9000}
       - CLICKHOUSE_URL=${CLICKHOUSE_URL:-http://clickhouse:8123}
       - CLICKHOUSE_USER=${CLICKHOUSE_USER:-langfuse}
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
       - CLICKHOUSE_CLUSTER_ENABLED=${CLICKHOUSE_CLUSTER_ENABLED:-false}
-      
       # Redis Configuration
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_AUTH=${REDIS_AUTH:-myredissecret}
       - REDIS_TLS_ENABLED=${REDIS_TLS_ENABLED:-false}
-      
       # S3 Event Upload (Required)
       - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
       - LANGFUSE_S3_EVENT_UPLOAD_REGION=${LANGFUSE_S3_EVENT_UPLOAD_REGION:-auto}
@@ -146,7 +148,6 @@ services:
       - LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=${LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT:-http://minio:9000}
       - LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=${LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE:-true}
       - LANGFUSE_S3_EVENT_UPLOAD_PREFIX=${LANGFUSE_S3_EVENT_UPLOAD_PREFIX:-events/}
-      
       # S3 Media Upload
       - LANGFUSE_S3_MEDIA_UPLOAD_BUCKET=${LANGFUSE_S3_MEDIA_UPLOAD_BUCKET:-langfuse}
       - LANGFUSE_S3_MEDIA_UPLOAD_REGION=${LANGFUSE_S3_MEDIA_UPLOAD_REGION:-auto}
@@ -155,7 +156,6 @@ services:
       - LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT=${LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT:-http://localhost:9090}
       - LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE=${LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE:-true}
       - LANGFUSE_S3_MEDIA_UPLOAD_PREFIX=${LANGFUSE_S3_MEDIA_UPLOAD_PREFIX:-media/}
-      
       # S3 Batch Export
       - LANGFUSE_S3_BATCH_EXPORT_ENABLED=${LANGFUSE_S3_BATCH_EXPORT_ENABLED:-false}
       - LANGFUSE_S3_BATCH_EXPORT_BUCKET=${LANGFUSE_S3_BATCH_EXPORT_BUCKET:-langfuse}
@@ -166,7 +166,6 @@ services:
       - LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID=${LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID:-minio}
       - LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY=${LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY:-miniosecret}
       - LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE=${LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE:-true}
-      
       # Bootstrap Configuration (Initial setup)
       - LANGFUSE_INIT_ORG_ID=${LANGFUSE_INIT_ORG_ID:-my-org}
       - LANGFUSE_INIT_PROJECT_ID=${LANGFUSE_INIT_PROJECT_ID:-my-project}
@@ -194,20 +193,17 @@ services:
       - TELEMETRY_ENABLED=${TELEMETRY_ENABLED:-false}
       - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-true}
       - LANGFUSE_AUTO_CLICKHOUSE_MIGRATION_DISABLED=true  # avoids race
-      
       # ClickHouse Configuration
       - CLICKHOUSE_MIGRATION_URL=${CLICKHOUSE_MIGRATION_URL:-clickhouse://clickhouse:9000}
       - CLICKHOUSE_URL=${CLICKHOUSE_URL:-http://clickhouse:8123}
       - CLICKHOUSE_USER=${CLICKHOUSE_USER:-langfuse}
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
       - CLICKHOUSE_CLUSTER_ENABLED=${CLICKHOUSE_CLUSTER_ENABLED:-false}
-      
       # Redis Configuration
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_AUTH=${REDIS_AUTH:-myredissecret}
       - REDIS_TLS_ENABLED=${REDIS_TLS_ENABLED:-false}
-      
       # S3 Event Upload (Required)
       - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
       - LANGFUSE_S3_EVENT_UPLOAD_REGION=${LANGFUSE_S3_EVENT_UPLOAD_REGION:-auto}
@@ -216,7 +212,6 @@ services:
       - LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=${LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT:-http://minio:9000}
       - LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=${LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE:-true}
       - LANGFUSE_S3_EVENT_UPLOAD_PREFIX=${LANGFUSE_S3_EVENT_UPLOAD_PREFIX:-events/}
-      
       # S3 Media Upload
       - LANGFUSE_S3_MEDIA_UPLOAD_BUCKET=${LANGFUSE_S3_MEDIA_UPLOAD_BUCKET:-langfuse}
       - LANGFUSE_S3_MEDIA_UPLOAD_REGION=${LANGFUSE_S3_MEDIA_UPLOAD_REGION:-auto}
@@ -225,7 +220,6 @@ services:
       - LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT=${LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT:-http://localhost:9090}
       - LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE=${LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE:-true}
       - LANGFUSE_S3_MEDIA_UPLOAD_PREFIX=${LANGFUSE_S3_MEDIA_UPLOAD_PREFIX:-media/}
-      
       # S3 Batch Export
       - LANGFUSE_S3_BATCH_EXPORT_ENABLED=${LANGFUSE_S3_BATCH_EXPORT_ENABLED:-false}
       - LANGFUSE_S3_BATCH_EXPORT_BUCKET=${LANGFUSE_S3_BATCH_EXPORT_BUCKET:-langfuse}
@@ -236,11 +230,9 @@ services:
       - LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID=${LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID:-minio}
       - LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY=${LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY:-miniosecret}
       - LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE=${LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE:-true}
-      
       # Worker-specific queue configuration
       - LANGFUSE_INGESTION_QUEUE_DELAY_MS=${LANGFUSE_INGESTION_QUEUE_DELAY_MS:-}
       - LANGFUSE_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS=${LANGFUSE_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS:-}
-      
       # Bootstrap Configuration (same as web - idempotent)
       - LANGFUSE_INIT_ORG_ID=${LANGFUSE_INIT_ORG_ID:-my-org}
       - LANGFUSE_INIT_PROJECT_ID=${LANGFUSE_INIT_PROJECT_ID:-my-project}
