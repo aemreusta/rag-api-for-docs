@@ -284,6 +284,7 @@ _For MVP choose Option A – zero plugin overhead._
 
 - **GET** `/docs` - Interactive Swagger UI
 - **GET** `/redoc` - ReDoc documentation
+- See `docs/9.0-structured-logging.md` - Comprehensive structured logging guide
 
 ### Chat API
 
@@ -296,6 +297,16 @@ _For MVP choose Option A – zero plugin overhead._
 - **GET** `/static/chat.js` - WordPress widget script
 
 ## 📊 Monitoring & Observability
+
+### Structured Logging
+
+The system provides comprehensive JSON-formatted structured logging with:
+
+- **Correlation IDs**: trace_id and request_id for cross-service tracing
+- **Sensitive Data Masking**: Automatic redaction of API keys, passwords, emails
+- **Request/Response Timing**: Performance metrics and business context  
+- **Log Aggregation Ready**: Compatible with ELK, Loki, and OTEL collectors
+- **Langfuse Integration**: Shared correlation IDs for 1-click drill-down from logs to traces
 
 ### Langfuse v3 Integration
 
