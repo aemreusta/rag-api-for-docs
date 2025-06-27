@@ -1,11 +1,5 @@
 # AI Gateway Project – Hürriyet Partisi
 
-![Build Status](https://img.shields.io/github/actions/workflow/status/gencturkler/ai-gateway/ci.yml?label=build)
-![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)
-![License](https://img.shields.io/github/license/gencturkler/ai-gateway)
-![Tests](https://img.shields.io/badge/tests-7/7_passing-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-35%25-yellow)
-
 Multilingual, policy-aware AI chat support for the **hurriyetpartisi.org** WordPress site. Visitors can ask questions about the party's programme, constitution and activities in natural language. The chatbot is backed by a Retrieval-Augmented Generation (RAG) pipeline and monitored through **Langfuse v3**.
 
 ## 🚀 Quick Start
