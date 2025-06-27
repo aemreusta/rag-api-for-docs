@@ -3,6 +3,8 @@ sequenceDiagram
     participant Frontend
     participant Backend (FastAPI)
     participant LlamaIndex Engine
+    participant LLM Router
+    participant External LLMs
     participant Langfuse
 
     User->>Frontend: Asks a question
@@ -12,11 +14,25 @@ sequenceDiagram
     
     Backend->>LlamaIndex Engine: 2. query(question)
     LlamaIndex Engine->>Langfuse: Log Retrieval Step
+    
+    LlamaIndex Engine->>LLM Router: 3. Request completion
+    LLM Router->>LLM Router: Check provider availability
+    
+    alt Primary Provider Available
+        LLM Router->>External LLMs: Request from primary provider
+        External LLMs-->>LLM Router: Response
+    else Primary Provider Failed
+        LLM Router->>External LLMs: Fallback to next provider
+        External LLMs-->>LLM Router: Response
+    end
+    
+    LLM Router-->>LlamaIndex Engine: Return completion
+    
     LlamaIndex Engine->>Langfuse: Log LLM Prompt Step
     LlamaIndex Engine->>Langfuse: Log LLM Response Step
-    LlamaIndex Engine-->>Backend: 3. Returns response object (answer & sources)
+    LlamaIndex Engine-->>Backend: 4. Returns response object (answer & sources)
     
-    Backend->>Langfuse: 4. Update Trace with final response & user feedback
+    Backend->>Langfuse: 5. Update Trace with final response & user feedback
     
     Backend-->>Frontend: 200 OK with JSON response
     Frontend->>User: Displays the answer 

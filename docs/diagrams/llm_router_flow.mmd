@@ -1,0 +1,62 @@
+flowchart TD
+    subgraph Client
+        A[User Request]
+    end
+    
+    subgraph API
+        B[FastAPI Endpoint]
+    end
+    
+    subgraph "LLM Router"
+        C[LLMRouter]
+        D1[OpenRouter Provider]
+        D2[Groq Provider]
+        D3[OpenAI Provider]
+        D4[Local Provider]
+        E[Redis Cache]
+    end
+    
+    subgraph "External Services"
+        F1[OpenRouter API]
+        F2[Groq API]
+        F3[OpenAI API]
+        F4[Local LLM]
+    end
+    
+    A --> B
+    B --> C
+    
+    C --> D1
+    C --> D2
+    C --> D3
+    C --> D4
+    
+    D1 <--> E
+    D2 <--> E
+    D3 <--> E
+    D4 <--> E
+    
+    D1 --> F1
+    D2 --> F2
+    D3 --> F3
+    D4 --> F4
+    
+    F1 -.-> |Error/Timeout| D2
+    F2 -.-> |Error/Timeout| D3
+    F3 -.-> |Error/Timeout| D4
+    
+    F1 --> |Success| B
+    F2 --> |Success| B
+    F3 --> |Success| B
+    F4 --> |Success| B
+    
+    classDef primary fill:#4285F4,stroke:#333,stroke-width:1px,color:white;
+    classDef secondary fill:#34A853,stroke:#333,stroke-width:1px,color:white;
+    classDef tertiary fill:#FBBC05,stroke:#333,stroke-width:1px,color:white;
+    classDef quaternary fill:#EA4335,stroke:#333,stroke-width:1px,color:white;
+    classDef cache fill:#9C27B0,stroke:#333,stroke-width:1px,color:white;
+    
+    class A,B primary
+    class C,D1,D2,D3,D4 secondary
+    class F1,F2,F3,F4 tertiary
+    class E cache 

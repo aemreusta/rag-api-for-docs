@@ -1,0 +1,73 @@
+classDiagram
+    class CustomLLM {
+        <<LlamaIndex>>
+        +complete()
+        +stream_complete()
+    }
+    
+    class LLMProvider {
+        <<Abstract>>
+        +is_available() bool
+        +complete(messages) CompletionResponse
+        +stream_complete(messages) AsyncGenerator
+    }
+    
+    class OpenRouterProvider {
+        -timeout_seconds: int
+        -model_name: str
+        -logger: Logger
+        +is_available() bool
+        +complete(messages) CompletionResponse
+        +stream_complete(messages) AsyncGenerator
+    }
+    
+    class GroqProvider {
+        -timeout_seconds: int
+        -model_name: str
+        -logger: Logger
+        +is_available() bool
+        +complete(messages) CompletionResponse
+        +stream_complete(messages) AsyncGenerator
+    }
+    
+    class OpenAIProvider {
+        -timeout_seconds: int
+        -model_name: str
+        -logger: Logger
+        +is_available() bool
+        +complete(messages) CompletionResponse
+        +stream_complete(messages) AsyncGenerator
+    }
+    
+    class LocalProvider {
+        -timeout_seconds: int
+        -model_name: str
+        -logger: Logger
+        +is_available() bool
+        +complete(messages) CompletionResponse
+        +stream_complete(messages) AsyncGenerator
+    }
+    
+    class LLMRouter {
+        -_redis_client: Any
+        -_providers: list[LLMProvider]
+        -_available_providers: list[LLMProvider]
+        +__init__()
+        +initialize_providers()
+        +initialize_redis()
+        +is_provider_in_cooldown(provider_name) bool
+        +mark_provider_failed(provider_name, error)
+        +classify_error(error) str
+        +_try_provider(provider, messages) CompletionResponse
+        +acomplete(messages) CompletionResponse
+        +complete(messages) CompletionResponse
+        +astream_complete(messages) AsyncGenerator
+        +stream_complete(messages) AsyncGenerator
+    }
+    
+    CustomLLM <|-- LLMRouter
+    LLMProvider <|-- OpenRouterProvider
+    LLMProvider <|-- GroqProvider
+    LLMProvider <|-- OpenAIProvider
+    LLMProvider <|-- LocalProvider
+    LLMRouter o-- LLMProvider 
