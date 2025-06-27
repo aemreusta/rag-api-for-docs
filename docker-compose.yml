@@ -1,35 +1,43 @@
 ---
+x-env: &default-env          # centralise .env declarations
+  env_file:
+    - .env
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  clickhouse_data:
+  clickhouse_logs:
+
 services:
+  # ─────────────────────────── Core FastAPI stack ───────────────────────────
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./app:/app/app  # Live code reloading
-      - ./pdf_documents:/app/pdf_documents
-      - ./tests:/app/tests  # For running tests
-    env_file:
-      - .env
-    environment:
-      - POSTGRES_SERVER=postgres
-      - REDIS_HOST=redis
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports: ["8000:8000"]
+    volumes:
+      - ./app:/app/app                # hot-reload
+      - ./pdf_documents:/app/pdf_documents
+      - ./tests:/app/tests
+    environment:
+      - POSTGRES_SERVER=postgres      # ← internal service names
+      - REDIS_HOST=redis
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      langfuse:
-        condition: service_started
-    networks:
-      - app-network
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      langfuse: {condition: service_started}
+    networks: [app-network]
 
+  # ───────────────────────────── Data stores ────────────────────────────────
   postgres:
     image: ankane/pgvector:latest
-    ports:
-      - "5432:5432"
+    ports: ["5432:5432"]
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
@@ -41,53 +49,47 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    networks:
-      - app-network
+    networks: [app-network]
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
+    ports: ["6379:6379"]
+    volumes: [redis_data:/data]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
-    networks:
-      - app-network
+    networks: [app-network]
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.3
+    image: clickhouse/clickhouse-server:24.3            # ≥ 24.3 required
     environment:
-      CLICKHOUSE_USER: langfuse
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
-      CLICKHOUSE_DB: langfuse
-      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      - CLICKHOUSE_USER=langfuse
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+      - CLICKHOUSE_DB=langfuse
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1           # creates user+DB
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 20
-    ports:
-      - "8123:8123"
-      - "9000:9000"
+    ports: ["8123:8123", "9000:9000"]
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
-    networks:
-      - app-network
+    networks: [app-network]
 
+  # ───────────────────────────── Langfuse v3 ────────────────────────────────
   langfuse:
-    image: ghcr.io/langfuse/langfuse:2.84.1
-    ports:
-      - "3000:3000"
+    image: ghcr.io/langfuse/langfuse:latest             # v3 stable tag
     env_file:
       - .env
+    ports: ["3000:3000"]
     environment:
       - DATABASE_URL=${LANGFUSE_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/langfuse}
       - TELEMETRY_ENABLED=false
+      # initial bootstrap (owner org/project/user)
       - LANGFUSE_INIT_ORG_ID=my-org
       - LANGFUSE_INIT_PROJECT_ID=my-project
       - LANGFUSE_INIT_PROJECT_PUBLIC_KEY=lf_pk_local
@@ -95,21 +97,19 @@ services:
       - LANGFUSE_INIT_USER_EMAIL=ai@gencturkler.co
       - LANGFUSE_INIT_USER_PASSWORD=gencturk123
     depends_on:
-      postgres:
-        condition: service_healthy
-      clickhouse:
-        condition: service_healthy
-    networks:
-      - app-network
+      postgres: {condition: service_healthy}
+      clickhouse: {condition: service_healthy}
+    networks: [app-network]
 
   langfuse-worker:
-    image: ghcr.io/langfuse/langfuse:2.84.1
+    image: ghcr.io/langfuse/langfuse-worker:latest      # dedicated worker img
     env_file:
       - .env
     environment:
       - DATABASE_URL=${LANGFUSE_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/langfuse}
       - TELEMETRY_ENABLED=false
-      - LANGFUSE_AUTO_CLICKHOUSE_MIGRATION_DISABLED=true
+      - LANGFUSE_AUTO_CLICKHOUSE_MIGRATION_DISABLED=true  # avoids race
+      # same bootstrap vars (idempotent)
       - LANGFUSE_INIT_ORG_ID=my-org
       - LANGFUSE_INIT_PROJECT_ID=my-project
       - LANGFUSE_INIT_PROJECT_PUBLIC_KEY=lf_pk_local
@@ -117,17 +117,5 @@ services:
       - LANGFUSE_INIT_USER_EMAIL=ai@gencturkler.co
       - LANGFUSE_INIT_USER_PASSWORD=gencturk123
     depends_on:
-      langfuse:
-        condition: service_started
-    networks:
-      - app-network
-
-volumes:
-  postgres_data:
-  redis_data:
-  clickhouse_data:
-  clickhouse_logs:
-
-networks:
-  app-network:
-    driver: bridge
+      langfuse: {condition: service_started}          # wait for migrations
+    networks: [app-network]
