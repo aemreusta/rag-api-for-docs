@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     PDF_DOCUMENTS_DIR: str = "pdf_documents"
 
     # Redis for Rate Limiting
-    REDIS_URL: str = "redis://redis:6379/0"
+    REDIS_URL: str = "redis://:myredissecret@redis:6379/0"
     RATE_LIMIT_COUNT: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 86400  # 24 hours
 

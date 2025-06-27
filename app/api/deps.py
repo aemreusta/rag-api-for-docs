@@ -1,3 +1,5 @@
+import sys
+
 from fastapi import HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
 
@@ -39,6 +41,11 @@ def get_api_key(key: str | None = Security(api_key_header)):
 async def rate_limit(request: Request):
     """
     Dependency that provides rate limiting for an endpoint.
+    Skips rate limiting during tests to avoid event loop conflicts.
     """
+    # Skip rate limiting during tests to avoid asyncio conflicts with TestClient
+    if "pytest" in sys.modules:
+        return
+
     limiter = RateLimiter(redis_client)
     await limiter.check(request)

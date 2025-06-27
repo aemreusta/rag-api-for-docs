@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SourceNode(BaseModel):
@@ -21,8 +21,10 @@ class SourceNode(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    question: str
-    session_id: str
+    question: str = Field(..., min_length=1, description="The question to ask the chatbot")
+    session_id: str = Field(
+        ..., min_length=1, description="Session identifier for conversation context"
+    )
 
 
 class ChatResponse(BaseModel):
