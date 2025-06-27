@@ -1,3 +1,36 @@
+[project]
+name = "chatbot-api-service"
+version = "0.1.0"
+description = "A production-ready, observable RAG API built with FastAPI and LlamaIndex to answer questions about charity policies from PDF documents. Features full observability with Langfuse, session-based rate limiting, and a secure admin panel."
+authors = [
+    { name = "Ahmet Emre Usta", email = "a.emreusta@hotmail.com" }
+]
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "python-dotenv",
+    "langfuse",
+    "llama-index",
+    "llama-index-llms-openrouter",
+    "llama-index-vector-stores-postgres",
+    "llama-index-embeddings-huggingface",
+    "psycopg2-binary",
+    "pgvector",
+    "pydantic==2.5.2",
+    "beautifulsoup4",
+    "html2text",
+    "unstructured",
+    "reportlab",
+    "alembic",
+    "redis"
+]
+keywords = [
+    "python", "nlp", "api", "docker", "chatbot", "postgresql", "charity", "non-profit", "observability", "rag", "fastapi", "llm", "generative-ai", "llmops", "llama-index", "pgvector", "langfuse"
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
