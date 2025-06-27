@@ -1,4 +1,11 @@
 -r requirements.in
 
 fakeredis
-pytest-asyncio 
+pytest-asyncio
+pre-commit
+ruff
+pyupgrade
+nbqa
+codespell
+yamllint
+commitizen

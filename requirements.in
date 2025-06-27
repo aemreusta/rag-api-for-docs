@@ -8,7 +8,7 @@ llama-index-vector-stores-postgres
 llama-index-embeddings-huggingface
 psycopg2-binary
 pgvector
-pydantic==2.5.2
+pydantic
 beautifulsoup4
 html2text
 unstructured
