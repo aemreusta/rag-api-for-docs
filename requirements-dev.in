@@ -1,0 +1,4 @@
+-r requirements.in
+
+fakeredis
+pytest-asyncio 

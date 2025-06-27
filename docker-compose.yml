@@ -23,9 +23,7 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports: ["8000:8000"]
     volumes:
-      - ./app:/app/app                # hot-reload
-      - ./pdf_documents:/app/pdf_documents
-      - ./tests:/app/tests
+      - ./:/app
     environment:
       - POSTGRES_SERVER=postgres      # ← internal service names
       - REDIS_HOST=redis

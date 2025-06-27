@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # Document Settings
     PDF_DOCUMENTS_DIR: str = "pdf_documents"
 
+    # Redis for Rate Limiting
+    REDIS_URL: str = "redis://redis:6379/0"
+    RATE_LIMIT_COUNT: int = 100
+    RATE_LIMIT_WINDOW_SECONDS: int = 86400  # 24 hours
+
     model_config = ConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore"
     )

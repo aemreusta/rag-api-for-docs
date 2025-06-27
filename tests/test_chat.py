@@ -1,9 +1,11 @@
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
+from app.core.redis import redis_client
 from app.main import app
 
 client = TestClient(app)
@@ -149,3 +151,43 @@ def test_chat_endpoint_various_inputs(mock_langfuse, mock_get_chat_response, que
 
     assert response.status_code == 200
     assert question.lower() in response.json()["answer"].lower()
+
+
+@pytest.fixture()
+async def redis_cleaner():
+    """Fixture to clean Redis before and after the test."""
+    await redis_client.flushdb()
+    yield
+    await redis_client.flushdb()
+
+
+@pytest.mark.asyncio
+@patch("app.api.v1.chat.get_chat_response")
+@patch("app.api.v1.chat.langfuse_client")
+async def test_chat_endpoint_rate_limiting(mock_langfuse, mock_get_chat_response, redis_cleaner):
+    """Test that rate limiting is applied to the chat endpoint."""
+    # Mock the successful response pathway
+    mock_response = MagicMock()
+    mock_response.__str__ = lambda x: "This is a test answer."
+    mock_response.source_nodes = []
+    mock_get_chat_response.return_value = mock_response
+    mock_langfuse.trace.return_value.generation.return_value = MagicMock()
+
+    with patch("app.core.config.settings.RATE_LIMIT_COUNT", 2):
+        async with httpx.AsyncClient(app=app, base_url="http://test") as ac:
+            headers = {"X-API-Key": settings.API_KEY}
+            json_payload = {
+                "question": "What is the volunteer policy?",
+                "session_id": "test-session-rate-limit",
+            }
+
+            # First two requests should succeed
+            for _ in range(2):
+                response = await ac.post("/api/v1/chat", json=json_payload, headers=headers)
+                assert response.status_code == 200
+
+            # Third request should be rate-limited
+            response = await ac.post("/api/v1/chat", json=json_payload, headers=headers)
+            assert response.status_code == 429
+            assert "Too many requests" in response.json()["detail"]
+            assert "Retry-After" in response.headers
