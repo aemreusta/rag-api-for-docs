@@ -1,7 +1,7 @@
 import langfuse
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.deps import get_api_key
+from app.api.deps import get_api_key, rate_limit
 from app.core.config import settings
 from app.core.query_engine import get_chat_response
 from app.schemas.chat import ChatRequest, ChatResponse, SourceNode
@@ -14,7 +14,9 @@ langfuse_client = langfuse.Langfuse(
 )
 
 
-@router.post("/chat", response_model=ChatResponse, dependencies=[Depends(get_api_key)])
+@router.post(
+    "/chat", response_model=ChatResponse, dependencies=[Depends(get_api_key), Depends(rate_limit)]
+)
 def handle_chat(request: ChatRequest):
     trace = langfuse_client.trace(name="chat-request", user_id=request.session_id)
     generation = trace.generation(name="rag-response", input=request.question)

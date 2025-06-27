@@ -1,8 +1,22 @@
+import contextlib
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import chat
 from app.core.config import settings
+from app.core.redis import redis_client
+
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Handles startup and shutdown events for the application.
+    """
+    await redis_client.ping()
+    yield
+    await redis_client.close()
+
 
 app = FastAPI(
     title="Charity Policy AI Chatbot API",
@@ -10,6 +24,7 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
+    lifespan=lifespan,
 )
 
 # Configure CORS

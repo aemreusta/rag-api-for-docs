@@ -30,7 +30,7 @@ curl http://localhost:8000/health
 - **AI Gateway**: <http://localhost:8080>
 - **Langfuse UI**: <http://localhost:3000>
 - **ClickHouse**: <http://localhost:8123>
-- **MinIO Console**: <http://localhost:9091> (S3 storage)
+- **MinIO Console**: <http://localhost:9091>
 
 ## 🎯 Purpose
 
@@ -40,18 +40,17 @@ Provide multilingual, policy-aware AI chat support on the public WordPress site 
 
 | Role | Entity / Contact |
 |------|------------------|
-| Sponsoring charity | **Hürriyet Partisi** (legal owner of hurriyetpartisi.org) |
-| Technical partner | **Genç Türkler** youth network – provides operational mailbox **<ai@gencturkler.co>** |
-| Project repo | _ai-gateway_ (private GitHub) |
-| Ops channel | Slack #ai-gateway |
+| Sponsoring party | **Hürriyet Partisi** |
+| Technical partner | **Genç Türkler** |
+| Project repo | _ai-gateway_ |
 
 ## 🏗 High-Level Architecture
 
 1. **FastAPI + PGVector RAG Service** – ingests party PDFs, posts and policy pages
-2. **AI Gateway** – single entry-point that proxies/load-balances calls to multiple LLM providers (Gemini, GPT-4o, Claude-Sonnet, local llama.cpp)
+2. **OPENROUTER** – single entry-point that proxies/load-balances calls to multiple LLM providers (Gemini, GPT-4o, Claude-Sonnet, local llama.cpp)
 3. **Langfuse v3** – traces + eval; ClickHouse for OLAP, Postgres for metadata
 4. **Redis** – both chat memory and per-IP rate-limit
-5. **WordPress Chat Widget** – embeds a JS snippet (served from the gateway) or uses the _InsertChat_ plugin with a shortcode
+5. **WordPress Chat Widget** – embeds a JS snippet
 
 ```
 Browser → WP Script ↔ ai-gateway ↔ RAG API ↔ LLMs
@@ -90,12 +89,11 @@ Browser → WP Script ↔ ai-gateway ↔ RAG API ↔ LLMs
 Docker Compose file spins up:
 
 - `app` (FastAPI)
-- `ai-gateway` (Go binary)
 - `postgres:15` + `pgvector extension`
 - `redis:7`
-- `clickhouse/clickhouse-server:24.3`
-- `minio` (S3-compatible storage for Langfuse v3)
-- `langfuse` & `langfuse-worker` (image `ghcr.io/langfuse/langfuse:latest`)
+- `clickhouse`
+- `minio`
+- `langfuse` & `langfuse-worker`
 
 ## 🛠 Available Commands
 
@@ -474,7 +472,6 @@ This repository is tagged with the following topics to make it more discoverable
 - LLM (Large Language Models)
 - Generative AI
 - NLP (Natural Language Processing)
-- AI Gateway
 - LLMOps
 
 ### Integration & Deployment

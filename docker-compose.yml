@@ -55,13 +55,12 @@ services:
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
-    command:
-      - --requirepass
-      - ${REDIS_AUTH:-myredissecret}
+    command: >
+      --requirepass ${REDIS_AUTH:-myredissecret}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "auth", '${REDIS_AUTH:-myredissecret}', "ping"]
+      test: ["CMD", "redis-cli", "--no-auth-warning", "auth", "${REDIS_AUTH:-myredissecret}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -93,10 +92,7 @@ services:
     restart: always
     entrypoint: sh
     # create the 'langfuse' bucket before starting the service
-    command:
-      - sh
-      - -c
-      - mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}

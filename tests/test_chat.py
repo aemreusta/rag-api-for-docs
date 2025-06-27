@@ -1,9 +1,13 @@
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
+import pytest_asyncio
+from fastapi import Request
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
+from app.core.redis import redis_client
 from app.main import app
 
 client = TestClient(app)
@@ -149,3 +153,58 @@ def test_chat_endpoint_various_inputs(mock_langfuse, mock_get_chat_response, que
 
     assert response.status_code == 200
     assert question.lower() in response.json()["answer"].lower()
+
+
+@pytest_asyncio.fixture
+async def redis_cleaner():
+    """Fixture to clean Redis before and after the test."""
+    await redis_client.flushdb()
+    yield
+    await redis_client.flushdb()
+
+
+@pytest.mark.asyncio
+@patch("app.api.v1.chat.get_chat_response")
+@patch("app.api.v1.chat.langfuse_client")
+async def test_chat_endpoint_rate_limiting(mock_langfuse, mock_get_chat_response, redis_cleaner):
+    """Test that rate limiting is applied to the chat endpoint."""
+    # Import here to get the actual rate limiting function
+    from app.api.deps import rate_limit
+    from app.core.ratelimit import RateLimiter
+
+    # Mock the successful response pathway
+    mock_response = MagicMock()
+    mock_response.__str__ = lambda x: "This is a test answer."
+    mock_response.source_nodes = []
+    mock_get_chat_response.return_value = mock_response
+    mock_langfuse.trace.return_value.generation.return_value = MagicMock()
+
+    # Create a test rate limiting function with a low limit
+    async def test_rate_limit(request: Request):
+        limiter = RateLimiter(redis_client, limit=2, window=60)
+        await limiter.check(request)
+
+    # Use FastAPI's dependency_overrides to replace the rate limiting dependency
+    app.dependency_overrides[rate_limit] = test_rate_limit
+
+    try:
+        async with httpx.AsyncClient(app=app, base_url="http://test") as ac:
+            headers = {"X-API-Key": settings.API_KEY}
+            json_payload = {
+                "question": "What is the volunteer policy?",
+                "session_id": "test-session-rate-limit",
+            }
+
+            # First two requests should succeed
+            for _ in range(2):
+                response = await ac.post("/api/v1/chat", json=json_payload, headers=headers)
+                assert response.status_code == 200
+
+            # Third request should be rate-limited
+            response = await ac.post("/api/v1/chat", json=json_payload, headers=headers)
+            assert response.status_code == 429
+            assert "Too many requests" in response.json()["detail"]
+            assert "Retry-After" in response.headers
+    finally:
+        # Clean up dependency overrides to avoid test interference
+        app.dependency_overrides.clear()

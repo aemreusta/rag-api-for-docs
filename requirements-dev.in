@@ -1,0 +1,16 @@
+-r requirements.in
+
+fakeredis
+pytest-asyncio
+pre-commit
+ruff
+pyupgrade
+nbqa
+codespell
+yamllint
+commitizen
+pytest
+pytest-httpx
+pytest-cov
+pytest-asyncio
+ipython
