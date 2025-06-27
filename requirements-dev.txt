@@ -433,8 +433,11 @@ pydantic==2.5.2
     #   llama-cloud-services
     #   llama-index-core
     #   openai
+    #   pydantic-settings
 pydantic-core==2.14.5
     # via pydantic
+pydantic-settings==2.2.1
+    # via -r /Users/emre/GitHub/chatbot-api-service/requirements.in
 pygments==2.19.2
     # via
     #   ipython
@@ -456,6 +459,7 @@ python-dotenv==1.1.1
     # via
     #   -r /Users/emre/GitHub/chatbot-api-service/requirements.in
     #   llama-cloud-services
+    #   pydantic-settings
 python-iso639==2025.2.18
     # via unstructured
 python-magic==0.4.27

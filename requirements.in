@@ -11,6 +11,7 @@ pgvector
 pydantic
 beautifulsoup4
 html2text
+pydantic-settings
 unstructured
 reportlab
 alembic

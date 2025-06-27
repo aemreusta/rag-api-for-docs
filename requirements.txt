@@ -363,8 +363,11 @@ pydantic==2.5.2
     #   llama-cloud-services
     #   llama-index-core
     #   openai
+    #   pydantic-settings
 pydantic-core==2.14.5
     # via pydantic
+pydantic-settings==2.2.1
+    # via -r requirements.in
 pypdf==4.3.1
     # via
     #   llama-index-readers-file
@@ -377,6 +380,7 @@ python-dotenv==1.1.1
     # via
     #   -r requirements.in
     #   llama-cloud-services
+    #   pydantic-settings
 python-iso639==2025.2.18
     # via unstructured
 python-magic==0.4.27
