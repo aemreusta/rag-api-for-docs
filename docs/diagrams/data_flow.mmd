@@ -8,20 +8,24 @@ graph TD
         B[LlamaIndex Query Engine]
         C[PostgreSQL w/ pgvector]
         D[Redis Rate Limiter]
+        G[Structured Logging]
     end
 
     subgraph "External Services & Platforms"
         E[OpenRouter API]
         F[Langfuse Platform]
+        H[Log Aggregation<br/>ELK/Loki/OTEL]
     end
 
-    User --"1. HTTPS Request"--> A;
+    User --"1. HTTPS Request<br/>+ X-Trace-ID"--> A;
     A --"2. Rate Limit Check"--> D;
-    A --"3. Query"--> B;
-    B --"4. Retrieve Context"--> C;
-    B --"5. Prompt + Context"--> E;
-    A --"6. Send Trace Data"--> F;
-    B --"7. Send Trace Data"--> F;
-    E --"8. LLM Response"--> B;
-    B --"9. Final Answer"--> A;
-    A --"10. JSON Response"--> User; 
+    A --"3. Generate<br/>Correlation IDs"--> G;
+    A --"4. Query"--> B;
+    B --"5. Retrieve Context"--> C;
+    B --"6. Prompt + Context"--> E;
+    A --"7. Send Trace Data<br/>+ trace_id"--> F;
+    B --"8. Send Trace Data<br/>+ trace_id"--> F;
+    E --"9. LLM Response"--> B;
+    B --"10. Final Answer"--> A;
+    A --"11. JSON Response<br/>+ X-Request-ID"--> User;
+    G --"12. JSON Logs<br/>+ Correlation IDs"--> H; 

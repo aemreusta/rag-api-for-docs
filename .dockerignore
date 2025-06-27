@@ -1,0 +1,38 @@
+# Development files
+.git/
+.github/
+.gitignore
+.env.example
+README.md
+docs/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test files
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+logs/
+*.log
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.mypy_cache/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Local development
+.env.local
+.env.development 

@@ -1,0 +1,2 @@
+# .gitleaksignore
+tests/test_structured_logging.py:generic-api-key:69

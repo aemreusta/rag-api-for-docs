@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import logging
-
 import redis.asyncio as redis
 from fastapi import HTTPException, Request
 from starlette import status
 
 from app.core.config import settings
+from app.core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class RateLimiter:
@@ -35,6 +36,7 @@ class RateLimiter:
             # This should not happen with a valid request.
             # If it does, we can either allow or deny.
             # For now, we allow it, but this could be logged.
+            logger.warning("Rate limit check: No client IP found, allowing request")
             return
 
         key = f"rate-limit:{ip}"
@@ -56,14 +58,37 @@ class RateLimiter:
         try:
             results = await pipe.execute()
         except (redis.AuthenticationError, redis.ConnectionError) as exc:  # type: ignore[attr-defined]
-            logging.getLogger(__name__).warning("Rate limiter disabled – Redis error: %s", exc)
+            logger.warning(
+                "Rate limiter disabled - Redis error",
+                error=str(exc),
+                error_type=type(exc).__name__,
+                client_ip=ip,
+                operation="incr_expire",
+            )
             return
 
         request_count = results[0]
 
         if request_count > self.limit:
+            logger.warning(
+                "Rate limit exceeded",
+                client_ip=ip,
+                request_count=request_count,
+                limit=self.limit,
+                window_seconds=self.window,
+                key=key,
+            )
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"Too many requests. Please try again after {self.window} seconds.",
                 headers={"Retry-After": str(self.window)},
             )
+
+        # Log successful rate limit check for debugging
+        logger.debug(
+            "Rate limit check passed",
+            client_ip=ip,
+            request_count=request_count,
+            limit=self.limit,
+            remaining=self.limit - request_count,
+        )

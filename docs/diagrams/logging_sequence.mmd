@@ -1,0 +1,49 @@
+sequenceDiagram
+    participant Client
+    participant Middleware
+    participant ChatAPI
+    participant QueryEngine
+    participant Langfuse
+    participant Logger
+    participant LogAggregator
+
+    Client->>+Middleware: POST /api/v1/chat (X-Trace-ID: trace-123)
+    
+    Note over Middleware: StructuredLoggingMiddleware
+    Middleware->>Middleware: Generate request_id (UUID)
+    Middleware->>Logger: Set correlation context
+    Logger->>Logger: request_id = uuid4()<br/>trace_id = "trace-123"
+    
+    Middleware->>Logger: Log request start
+    Logger->>LogAggregator: {"event": "Request started", "method": "POST", "path": "/api/v1/chat", "request_id": "req-456", "trace_id": "trace-123"}
+    
+    Middleware->>+ChatAPI: Process request
+    
+    Note over ChatAPI: Business Logic
+    ChatAPI->>Logger: Log processing start
+    Logger->>LogAggregator: {"event": "Processing chat request", "session_id": "session-789", "question_length": 25, "request_id": "req-456", "trace_id": "trace-123"}
+    
+    ChatAPI->>+QueryEngine: Query knowledge base
+    QueryEngine->>Logger: Log query execution
+    Logger->>LogAggregator: {"event": "Query executed", "query_type": "similarity", "vector_count": 1536, "request_id": "req-456", "trace_id": "trace-123"}
+    
+    QueryEngine-->>-ChatAPI: Return context + answer
+    
+    ChatAPI->>+Langfuse: Create trace (id=trace-123)
+    Langfuse-->>-ChatAPI: Trace created
+    
+    ChatAPI->>Logger: Log processing complete
+    Logger->>LogAggregator: {"event": "Chat request processed", "session_id": "session-789", "answer_length": 150, "processing_time_ms": 245, "request_id": "req-456", "trace_id": "trace-123"}
+    
+    ChatAPI-->>-Middleware: Return response
+    
+    Note over Middleware: Response Headers
+    Middleware->>Middleware: Add X-Request-ID: req-456<br/>Add X-Trace-ID: trace-123
+    
+    Middleware->>Logger: Log request complete
+    Logger->>LogAggregator: {"event": "Request completed", "status_code": 200, "duration_ms": 250, "request_id": "req-456", "trace_id": "trace-123"}
+    
+    Middleware-->>-Client: 200 OK + Response (X-Request-ID, X-Trace-ID)
+    
+    Note over LogAggregator: Log Analysis
+    LogAggregator->>LogAggregator: Index logs by correlation IDs<br/>Enable trace drilling from logs to Langfuse 

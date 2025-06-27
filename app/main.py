@@ -5,7 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import chat
 from app.core.config import settings
+from app.core.logging_config import get_logger, setup_logging
+from app.core.middleware import RateLimitLoggingMiddleware, StructuredLoggingMiddleware
 from app.core.redis import redis_client
+
+# Setup logging before anything else
+setup_logging()
+logger = get_logger(__name__)
 
 
 @contextlib.asynccontextmanager
@@ -13,8 +19,14 @@ async def lifespan(app: FastAPI):
     """
     Handles startup and shutdown events for the application.
     """
-    await redis_client.ping()
+    logger.info("Application startup", environment=settings.ENVIRONMENT, debug=settings.DEBUG)
+    try:
+        await redis_client.ping()
+        logger.info("Redis connection established")
+    except Exception as e:
+        logger.warning("Redis connection failed", error=str(e))
     yield
+    logger.info("Application shutdown")
     await redis_client.close()
 
 
@@ -26,6 +38,10 @@ app = FastAPI(
     redoc_url="/redoc" if settings.DEBUG else None,
     lifespan=lifespan,
 )
+
+# Add structured logging middleware (order matters - this should be first)
+app.add_middleware(StructuredLoggingMiddleware)
+app.add_middleware(RateLimitLoggingMiddleware)
 
 # Configure CORS
 app.add_middleware(
@@ -42,6 +58,7 @@ def health_check():
     """
     Health check endpoint to verify the API is running.
     """
+    logger.info("Health check requested")
     return {"status": "ok", "environment": settings.ENVIRONMENT, "version": app.version}
 
 

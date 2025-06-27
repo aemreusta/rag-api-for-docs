@@ -460,3 +460,5 @@ ehthumbs_vista.db
 # Windows shortcuts
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,windows,linux,visualbasic,visualstudiocode,pycharm,python,data,database,jupyternotebooks
+# Structured logging files
+logs/
