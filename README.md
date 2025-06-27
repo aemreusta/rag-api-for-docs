@@ -1,11 +1,5 @@
 # AI Gateway Project – Hürriyet Partisi
 
-![Build Status](https://img.shields.io/badge/build-passing-green)
-![Python Version](https://img.shields.io/badge/python-3.11+-blue)
-![License](https://img.shields.io/badge/license-MIT-lightgrey)
-![Tests](https://img.shields.io/badge/tests-7/7_passing-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-35%25-yellow)
-
 Multilingual, policy-aware AI chat support for the **hurriyetpartisi.org** WordPress site. Visitors can ask questions about the party's programme, constitution and activities in natural language. The chatbot is backed by a Retrieval-Augmented Generation (RAG) pipeline and monitored through **Langfuse v3**.
 
 ## 🚀 Quick Start
@@ -85,7 +79,7 @@ Browser → WP Script ↔ ai-gateway ↔ RAG API ↔ LLMs
 | AI Gateway | Go | High-performance proxy for load balancing across multiple LLM providers |
 | LLM Observability | Langfuse v3 | Purpose-built platform for tracing, debugging, evaluating, and monitoring LLM applications |
 | OLAP Database | ClickHouse 24.3 | High-performance analytical database for Langfuse metrics and analytics |
-| Language | Python 3.11+ | Modern Python with full type hints and async support |
+| Language | Python 3.10+ | Modern Python with full type hints and async support |
 | Primary Database | PostgreSQL w/ pgvector | Robust SQL database with vector similarity search capabilities |
 | In-Memory Datastore | Redis 7 | High-speed key-value store for session management, caching, and rate limiting |
 | Frontend Integration | WordPress | Chat widget integration for public website |
@@ -207,6 +201,7 @@ Edit `.env` and replace placeholder values:
 | `CLICKHOUSE_PASSWORD` | `<32-hex>` | **REQUIRED**: `openssl rand -hex 32` |
 | `LANGFUSE_S3_EVENT_UPLOAD_BUCKET` | `langfuse` | **REQUIRED**: MinIO bucket name |
 | `MINIO_ROOT_PASSWORD` | `miniosecret` | **REQUIRED**: Strong password |
+| `REDIS_AUTH` | `myredissecret` | **REQUIRED**: Strong password |
 
 #### Step-by-step .env Configuration
 
