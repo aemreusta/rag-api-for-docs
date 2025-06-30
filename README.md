@@ -62,12 +62,12 @@ Browser → WP Script ↔ ai-gateway ↔ RAG API ↔ LLMs
 - **Multilingual Support:** Turkish and English prompt templates for bilingual audience
 - **High-Accuracy RAG:** Leverages **LlamaIndex** for state-of-the-art data ingestion, indexing, and retrieval from PDF documents
 - **AI Gateway:** Single entry-point with load balancing across multiple LLM providers
-- **LLM Router:** Priority-based LLM provider routing with automatic fallback on errors (timeout, rate limit, auth failures)
+- **LLM Router:** ✅ **Production-ready** priority-based routing (OpenRouter→Groq→OpenAI→Local) with automatic fallback, Redis caching, and comprehensive error handling
 - **Conversational Memory:** The chatbot remembers conversation context using Redis
-- **Production-Grade API:** Built with **FastAPI** for high performance, automatic data validation, and interactive documentation
+- **Production-Grade API:** Built with **FastAPI** with 70 passing tests, structured logging, and comprehensive error handling
 - **Rate Limiting:** Per-IP rate limiting using **Redis** protects the API from abuse and controls operational costs
 - **LLM Observability:** Integrated with **Langfuse v3** for detailed tracing, debugging, and cost/performance monitoring
-- **Model Flexibility:** Uses multiple LLM providers to optimize for cost and performance
+- **Model Flexibility:** Uses multiple LLM providers (Gemini, Llama 3, GPT) to optimize for cost and performance
 - **WordPress Integration:** Easy embedding via script or InsertChat plugin
 
 ## Tech Stack
