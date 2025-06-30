@@ -1,4 +1,4 @@
-.PHONY: help build up down logs shell test lint format clean
+.PHONY: help build up down logs shell test lint format clean rebuild
 
 help: ## Show this help message
 	@echo 'Usage:'
@@ -89,3 +89,7 @@ clickhouse-test: ## Run ClickHouse smoke tests
 
 langfuse-logs: ## View Langfuse service logs
 	docker-compose logs -f langfuse langfuse-worker clickhouse 
+
+# Rebuild all Docker images without cache
+rebuild:
+	docker compose build --no-cache 

@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     # LLM Provider Configuration
     OPENROUTER_API_KEY: str
     GROQ_API_KEY: str = ""  # Optional
+    GROQ_MODEL_NAME: str = "llama3-70b-8192"  # Default Groq model
+    GROQ_TIMEOUT_SECONDS: int = 30  # Groq-specific timeout
     OPENAI_API_KEY: str = ""  # Optional
     GOOGLE_AI_STUDIO_API_KEY: str = ""  # Optional
     LOCAL_LLM_PATH: str = ""  # Optional

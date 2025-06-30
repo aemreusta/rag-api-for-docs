@@ -28,6 +28,10 @@ classDiagram
         +is_available() bool
         +complete(messages) CompletionResponse
         +stream_complete(messages) AsyncGenerator
+        +_retry_with_backoff(func, *args) Any
+        +_convert_messages_to_groq_format(messages) list
+        +_create_completion_response(response) CompletionResponse
+        +_create_streaming_response(chunk) CompletionResponse
     }
     
     class OpenAIProvider {
@@ -52,12 +56,17 @@ classDiagram
         -_redis_client: Any
         -_providers: list[LLMProvider]
         -_available_providers: list[LLMProvider]
+        -_logger: Any
+        +logger: Any
         +__init__()
-        +initialize_providers()
-        +initialize_redis()
-        +is_provider_in_cooldown(provider_name) bool
-        +mark_provider_failed(provider_name, error)
-        +classify_error(error) str
+        +redis_client: Any
+        +available_providers: list[LLMProvider]
+        +metadata: LLMMetadata
+        +_get_cache_key(provider, model, error_type) str
+        +_is_provider_cached_as_failed(provider, error_type) bool
+        +_cache_provider_failure(provider, error_type)
+        +_classify_error(error) ErrorType
+        +_should_trigger_fallback(error) bool
         +_try_provider(provider, messages) CompletionResponse
         +acomplete(messages) CompletionResponse
         +complete(messages) CompletionResponse

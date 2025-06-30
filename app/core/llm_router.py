@@ -18,6 +18,8 @@ from enum import Enum
 from typing import Any
 
 import redis
+from groq import AsyncGroq
+from groq.types.chat import ChatCompletionChunk
 from llama_index.core.base.llms.types import ChatMessage, CompletionResponse
 from llama_index.core.llms import LLMMetadata
 from llama_index.core.llms.custom import CustomLLM
@@ -143,31 +145,176 @@ class OpenRouterProvider(LLMProvider):
 
 
 class GroqProvider(LLMProvider):
-    """Groq provider implementation (placeholder for future integration)."""
+    """Groq provider implementation using the official Groq Python client."""
 
-    def __init__(self, timeout_seconds: int = 30):
-        super().__init__(ProviderType.GROQ, timeout_seconds)
-        # TODO: Initialize Groq client when feat/groq-llama3 is implemented
-        self.model_name = "llama3-70b-8192"
+    def __init__(self, timeout_seconds: int = None):
+        # Use Groq-specific timeout if provided, otherwise use default
+        timeout = timeout_seconds or settings.GROQ_TIMEOUT_SECONDS
+        super().__init__(ProviderType.GROQ, timeout)
+        self.model_name = settings.GROQ_MODEL_NAME
+
+        if self.is_available():
+            self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
 
     def is_available(self) -> bool:
-        # TODO: Check GROQ_API_KEY when implementation is ready
-        return False  # Placeholder - not implemented yet
+        return bool(settings.GROQ_API_KEY)
+
+    def _convert_messages_to_groq_format(self, messages: list[ChatMessage]) -> list[dict]:
+        """Convert LlamaIndex ChatMessage format to Groq format."""
+        groq_messages = []
+        for msg in messages:
+            groq_messages.append({"role": msg.role.value, "content": msg.content})
+        return groq_messages
+
+    def _create_completion_response(self, groq_response) -> CompletionResponse:
+        """Convert Groq response to LlamaIndex CompletionResponse format."""
+        from llama_index.core.base.llms.types import MessageRole
+
+        # Extract the message content from Groq response
+        message_content = groq_response.choices[0].message.content
+
+        # Create ChatMessage for the response
+        response_message = ChatMessage(role=MessageRole.ASSISTANT, content=message_content)
+
+        return CompletionResponse(
+            text=message_content,  # Required field
+            message=response_message,
+            raw=groq_response.model_dump()
+            if hasattr(groq_response, "model_dump")
+            else groq_response,
+        )
+
+    def _create_streaming_response(self, chunk: ChatCompletionChunk) -> CompletionResponse:
+        """Convert Groq streaming chunk to LlamaIndex CompletionResponse format."""
+        from llama_index.core.base.llms.types import MessageRole
+
+        # Extract delta content from the chunk
+        delta_content = chunk.choices[0].delta.content or ""
+
+        # Create ChatMessage for the chunk
+        response_message = ChatMessage(role=MessageRole.ASSISTANT, content=delta_content)
+
+        return CompletionResponse(
+            text=delta_content,  # Required field
+            message=response_message,
+            raw=chunk.model_dump() if hasattr(chunk, "model_dump") else chunk,
+        )
+
+    async def _retry_with_backoff(self, func, *args, max_retries=3, **kwargs):
+        """Retry function with exponential backoff."""
+        for attempt in range(max_retries):
+            try:
+                return await asyncio.wait_for(func(*args, **kwargs), timeout=self.timeout_seconds)
+            except asyncio.TimeoutError as err:
+                if attempt == max_retries - 1:
+                    raise TimeoutError(
+                        f"Groq request timed out after {self.timeout_seconds}s"
+                    ) from err
+                wait_time = 2**attempt
+                self.logger.warning(
+                    f"Groq request timed out, retrying in {wait_time}s", attempt=attempt + 1
+                )
+                await asyncio.sleep(wait_time)
+            except Exception as e:
+                # Check for specific Groq error types
+                error_str = str(e).lower()
+                if "429" in error_str or "rate limit" in error_str:
+                    if attempt == max_retries - 1:
+                        raise
+                    wait_time = 2**attempt
+                    self.logger.warning(
+                        f"Groq rate limited, retrying in {wait_time}s", attempt=attempt + 1
+                    )
+                    await asyncio.sleep(wait_time)
+                elif "503" in error_str or "service unavailable" in error_str:
+                    if attempt == max_retries - 1:
+                        raise
+                    wait_time = 2**attempt
+                    self.logger.warning(
+                        f"Groq service unavailable, retrying in {wait_time}s", attempt=attempt + 1
+                    )
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise
 
     async def complete(self, messages: list[ChatMessage], **kwargs) -> CompletionResponse:
-        # TODO: Implement Groq completion
-        raise NotImplementedError(
-            "Groq provider not yet implemented - placeholder for feat/groq-llama3"
-        )
+        try:
+            self.logger.info("Calling Groq for completion", model=self.model_name)
+
+            # Convert messages to Groq format
+            groq_messages = self._convert_messages_to_groq_format(messages)
+
+            # Prepare parameters for Groq API
+            groq_params = {
+                "model": self.model_name,
+                "messages": groq_messages,
+                "temperature": kwargs.get("temperature", 0.7),
+                "max_tokens": kwargs.get("max_tokens", 1024),
+            }
+
+            # Add optional parameters if provided
+            if "top_p" in kwargs:
+                groq_params["top_p"] = kwargs["top_p"]
+            if "stream" in kwargs:
+                groq_params["stream"] = kwargs["stream"]
+
+            # Make the API call with retry logic
+            response = await self._retry_with_backoff(
+                self.client.chat.completions.create, **groq_params
+            )
+
+            self.logger.info("Groq completion successful")
+            return self._create_completion_response(response)
+
+        except asyncio.TimeoutError as err:
+            self.logger.warning("Groq request timed out", timeout=self.timeout_seconds)
+            raise TimeoutError(f"Groq request timed out after {self.timeout_seconds}s") from err
+        except Exception as e:
+            self.logger.error("Groq completion failed", error=str(e), error_type=type(e).__name__)
+            raise
 
     async def stream_complete(
         self, messages: list[ChatMessage], **kwargs
     ) -> AsyncGenerator[CompletionResponse, None]:
-        # TODO: Implement Groq streaming
-        raise NotImplementedError(
-            "Groq provider not yet implemented - placeholder for feat/groq-llama3"
-        )
-        yield  # This yield is needed to make this a generator function
+        try:
+            self.logger.info("Calling Groq for streaming completion", model=self.model_name)
+
+            # Convert messages to Groq format
+            groq_messages = self._convert_messages_to_groq_format(messages)
+
+            # Prepare parameters for Groq API
+            groq_params = {
+                "model": self.model_name,
+                "messages": groq_messages,
+                "stream": True,
+                "temperature": kwargs.get("temperature", 0.7),
+                "max_tokens": kwargs.get("max_tokens", 1024),
+            }
+
+            # Add optional parameters if provided
+            if "top_p" in kwargs:
+                groq_params["top_p"] = kwargs["top_p"]
+
+            # Make the streaming API call
+            async with asyncio.timeout(self.timeout_seconds):
+                stream = await self.client.chat.completions.create(**groq_params)
+
+                async for chunk in stream:
+                    if chunk.choices[0].delta.content is not None:
+                        yield self._create_streaming_response(chunk)
+
+            self.logger.info("Groq streaming completion successful")
+
+        except asyncio.TimeoutError as err:
+            self.logger.warning("Groq streaming request timed out", timeout=self.timeout_seconds)
+            raise TimeoutError(
+                f"Groq streaming request timed out after {self.timeout_seconds}s"
+            ) from err
+        except Exception as e:
+            self.logger.error(
+                "Groq streaming completion failed", error=str(e), error_type=type(e).__name__
+            )
+            raise
 
     def get_model_name(self) -> str:
         return self.model_name
@@ -263,9 +410,18 @@ class LLMRouter(CustomLLM):
     _redis_client: Any | None = PrivateAttr(default=None)
     _providers: list[LLMProvider] = PrivateAttr(default_factory=list)
     _available_providers: list[LLMProvider] = PrivateAttr(default_factory=list)
+    _logger: Any = PrivateAttr()
+
+    @property
+    def logger(self):
+        """Access to the logger instance."""
+        return self._logger
 
     def __init__(self):
         super().__init__()
+
+        # Initialize logger for this instance
+        self._logger = get_logger("app.core.llm_router")
 
         # Initialize Redis client for caching failed providers
         try:
@@ -279,7 +435,7 @@ class LLMRouter(CustomLLM):
         # Initialize providers in priority order
         self._providers = [
             OpenRouterProvider(settings.LLM_TIMEOUT_SECONDS),
-            GroqProvider(settings.LLM_TIMEOUT_SECONDS),
+            GroqProvider(settings.GROQ_TIMEOUT_SECONDS),
             OpenAIProvider(settings.LLM_TIMEOUT_SECONDS),
             LocalProvider(settings.LLM_TIMEOUT_SECONDS),
         ]
@@ -319,58 +475,53 @@ class LLMRouter(CustomLLM):
 
     @property
     def metadata(self) -> LLMMetadata:
-        """Return metadata for the router."""
+        """Get LLM metadata for the router."""
         return LLMMetadata(
-            context_window=4096,  # Conservative estimate
-            num_output=1024,
-            is_chat_model=True,
             model_name="llm-router",
+            is_function_calling_model=False,
+            is_chat_model=True,
+            context_window=4096,  # Conservative estimate - updated to match test expectations
+            num_output=1024,  # Conservative estimate
         )
 
     def _get_cache_key(self, provider: LLMProvider, model: str, error_type: ErrorType) -> str:
-        """Generate Redis cache key for failed provider."""
+        """Generate cache key for failed provider."""
         return f"failed_provider:{provider.provider_type.value}:{model}:{error_type.value}"
 
     def _is_provider_cached_as_failed(self, provider: LLMProvider, error_type: ErrorType) -> bool:
-        """Check if provider is cached as failed for the given error type."""
+        """Check if provider is cached as failed."""
         if not self._redis_client:
             return False
 
         cache_key = self._get_cache_key(provider, provider.get_model_name(), error_type)
-        try:
-            return self._redis_client.exists(cache_key) > 0
-        except Exception as e:
-            logger.warning("Failed to check provider cache", error=str(e))
-            return False
+        return bool(self._redis_client.exists(cache_key))
 
     def _cache_provider_failure(self, provider: LLMProvider, error_type: ErrorType):
-        """Cache provider as failed for the specified duration."""
+        """Cache provider failure in Redis."""
         if not self._redis_client:
             return
 
         cache_key = self._get_cache_key(provider, provider.get_model_name(), error_type)
-        try:
-            self._redis_client.setex(
-                cache_key,
-                settings.LLM_FALLBACK_CACHE_SECONDS,
-                json.dumps(
-                    {
-                        "timestamp": time.time(),
-                        "provider": provider.provider_type.value,
-                        "model": provider.get_model_name(),
-                        "error_type": error_type.value,
-                    }
-                ),
-            )
-            logger.info(
-                "Cached provider failure",
-                provider=provider.provider_type.value,
-                model=provider.get_model_name(),
-                error_type=error_type.value,
-                cache_duration=settings.LLM_FALLBACK_CACHE_SECONDS,
-            )
-        except Exception as e:
-            logger.warning("Failed to cache provider failure", error=str(e))
+        cache_data = {
+            "provider": provider.provider_type.value,
+            "model": provider.get_model_name(),
+            "error_type": error_type.value,
+            "timestamp": time.time(),
+        }
+
+        self._redis_client.setex(
+            cache_key,
+            settings.LLM_FALLBACK_CACHE_SECONDS,
+            json.dumps(cache_data),
+        )
+
+        self.logger.warning(
+            "Provider cached as failed",
+            provider=provider.provider_type.value,
+            model=provider.get_model_name(),
+            error_type=error_type.value,
+            cooldown_seconds=settings.LLM_FALLBACK_CACHE_SECONDS,
+        )
 
     def _classify_error(self, error: Exception) -> ErrorType:
         """Classify error type for caching purposes."""
@@ -379,23 +530,40 @@ class LLMRouter(CustomLLM):
 
         if isinstance(error, TimeoutError) or "timeout" in error_str:
             return ErrorType.TIMEOUT
-        elif "rate limit" in error_str or "429" in error_str:
+        elif "429" in error_str or "rate limit" in error_str:
             return ErrorType.RATE_LIMIT
-        elif "unauthorized" in error_str or "401" in error_str or "403" in error_str:
+        elif "401" in error_str or "403" in error_str or "unauthorized" in error_str:
             return ErrorType.AUTH_FAILURE
-        elif "connection" in error_str or "network" in error_str:
+        elif "413" in error_str or "token limit" in error_str:
+            return ErrorType.API_ERROR
+        elif "503" in error_str or "service unavailable" in error_str:
+            return ErrorType.API_ERROR
+        elif "network" in error_str or "connection" in error_str:
             return ErrorType.NETWORK_ERROR
         else:
             return ErrorType.API_ERROR
 
     def _should_trigger_fallback(self, error: Exception) -> bool:
         """Determine if error should trigger fallback to next provider."""
-        # Don't fallback for malformed requests or client errors
         error_str = str(error).lower()
-        if "400" in error_str or "malformed" in error_str or "invalid request" in error_str:
+
+        # Always trigger fallback for these errors
+        if isinstance(error, TimeoutError):
+            return True
+        if "429" in error_str or "rate limit" in error_str:
+            return True
+        if "401" in error_str or "403" in error_str or "unauthorized" in error_str:
+            return True
+        if "503" in error_str or "service unavailable" in error_str:
+            return True
+        if "network" in error_str or "connection" in error_str:
+            return True
+
+        # Don't trigger fallback for client errors (4xx except 429)
+        if "400" in error_str or "413" in error_str or "malformed" in error_str:
             return False
 
-        # Fallback for all other errors (timeouts, rate limits, auth failures, etc.)
+        # Default to triggering fallback for other errors
         return True
 
     async def _try_provider(
@@ -403,41 +571,15 @@ class LLMRouter(CustomLLM):
     ) -> CompletionResponse:
         """Try to get completion from a specific provider."""
         try:
-            logger.info(
-                "Attempting provider",
-                provider=provider.provider_type.value,
-                model=provider.get_model_name(),
-            )
-
-            response = await provider.complete(messages, **kwargs)
-
-            logger.info(
-                "Provider succeeded",
-                provider=provider.provider_type.value,
-                model=provider.get_model_name(),
-            )
-
-            return response
-
+            return await provider.complete(messages, **kwargs)
         except Exception as e:
             error_type = self._classify_error(e)
 
-            logger.warning(
-                "Provider failed",
-                provider=provider.provider_type.value,
-                model=provider.get_model_name(),
-                error=str(e),
-                error_type=error_type.value,
-            )
-
-            # Cache the failure
-            self._cache_provider_failure(provider, error_type)
-
-            if not self._should_trigger_fallback(e):
-                # Re-raise immediately for client errors
+            if self._should_trigger_fallback(e):
+                self._cache_provider_failure(provider, error_type)
                 raise
 
-            # Otherwise, let the router try the next provider
+            # Re-raise the error if it shouldn't trigger fallback
             raise
 
     async def acomplete(self, messages: list[ChatMessage], **kwargs) -> CompletionResponse:
@@ -446,9 +588,9 @@ class LLMRouter(CustomLLM):
 
         for provider in self._available_providers:
             # Skip providers that are cached as failed
-            error_type = ErrorType.API_ERROR  # Check general failure first
+            error_type = ErrorType.TIMEOUT  # Default error type for checking cache
             if self._is_provider_cached_as_failed(provider, error_type):
-                logger.info(
+                self.logger.info(
                     "Skipping cached failed provider",
                     provider=provider.provider_type.value,
                     model=provider.get_model_name(),
@@ -456,18 +598,23 @@ class LLMRouter(CustomLLM):
                 continue
 
             try:
+                self.logger.info(
+                    "Trying provider",
+                    provider=provider.provider_type.value,
+                    model=provider.get_model_name(),
+                )
                 return await self._try_provider(provider, messages, **kwargs)
             except Exception as e:
                 last_error = e
+                self.logger.warning(
+                    "Provider failed, trying next",
+                    provider=provider.provider_type.value,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
                 continue
 
         # All providers failed
-        logger.error(
-            "All LLM providers failed",
-            attempted_providers=[p.provider_type.value for p in self._available_providers],
-            last_error=str(last_error) if last_error else "Unknown error",
-        )
-
         if last_error:
             raise last_error
         else:
@@ -477,11 +624,15 @@ class LLMRouter(CustomLLM):
         """Synchronous complete method."""
         try:
             loop = asyncio.get_event_loop()
+            return loop.run_until_complete(self.acomplete(messages, **kwargs))
         except RuntimeError:
+            # Create new event loop if none exists
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-
-        return loop.run_until_complete(self.acomplete(messages, **kwargs))
+            try:
+                return loop.run_until_complete(self.acomplete(messages, **kwargs))
+            finally:
+                loop.close()
 
     async def astream_complete(
         self, messages: list[ChatMessage], **kwargs
@@ -491,9 +642,9 @@ class LLMRouter(CustomLLM):
 
         for provider in self._available_providers:
             # Skip providers that are cached as failed
-            error_type = ErrorType.API_ERROR
+            error_type = ErrorType.TIMEOUT  # Default error type for checking cache
             if self._is_provider_cached_as_failed(provider, error_type):
-                logger.info(
+                self.logger.info(
                     "Skipping cached failed provider for streaming",
                     provider=provider.provider_type.value,
                     model=provider.get_model_name(),
@@ -501,54 +652,29 @@ class LLMRouter(CustomLLM):
                 continue
 
             try:
-                logger.info(
-                    "Attempting streaming with provider",
+                self.logger.info(
+                    "Trying provider for streaming",
                     provider=provider.provider_type.value,
                     model=provider.get_model_name(),
                 )
-
                 async for chunk in provider.stream_complete(messages, **kwargs):
                     yield chunk
-
-                logger.info(
-                    "Streaming completed successfully",
-                    provider=provider.provider_type.value,
-                    model=provider.get_model_name(),
-                )
-                return
-
+                return  # Success, exit the loop
             except Exception as e:
-                error_type = self._classify_error(e)
-
-                logger.warning(
-                    "Provider streaming failed",
-                    provider=provider.provider_type.value,
-                    model=provider.get_model_name(),
-                    error=str(e),
-                    error_type=error_type.value,
-                )
-
-                # Cache the failure
-                self._cache_provider_failure(provider, error_type)
-
-                if not self._should_trigger_fallback(e):
-                    # Re-raise immediately for client errors
-                    raise
-
                 last_error = e
+                self.logger.warning(
+                    "Provider failed for streaming, trying next",
+                    provider=provider.provider_type.value,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
                 continue
 
         # All providers failed
-        logger.error(
-            "All LLM providers failed for streaming",
-            attempted_providers=[p.provider_type.value for p in self._available_providers],
-            last_error=str(last_error) if last_error else "Unknown error",
-        )
-
         if last_error:
             raise last_error
         else:
-            raise RuntimeError("All LLM providers failed for streaming")
+            raise RuntimeError("All LLM providers failed")
 
     def stream_complete(
         self, messages: list[ChatMessage], **kwargs
@@ -556,19 +682,12 @@ class LLMRouter(CustomLLM):
         """Synchronous streaming complete method."""
         try:
             loop = asyncio.get_event_loop()
+            return loop.run_until_complete(self.astream_complete(messages, **kwargs))
         except RuntimeError:
+            # Create new event loop if none exists
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-
-        async def _stream():
-            async for chunk in self.astream_complete(messages, **kwargs):
-                yield chunk
-
-        # Convert async generator to sync generator
-        async_gen = _stream()
-        while True:
             try:
-                chunk = loop.run_until_complete(async_gen.__anext__())
-                yield chunk
-            except StopAsyncIteration:
-                break
+                return loop.run_until_complete(self.astream_complete(messages, **kwargs))
+            finally:
+                loop.close()
