@@ -99,7 +99,7 @@ LANGFUSE_HOST=http://localhost:3000
 
 ### Common Issues
 
-1. **Import Errors**: Ensure all dependencies are installed with `pip install -r requirements.txt`
+1. **Import Errors**: Ensure all dependencies are installed with `uv pip sync requirements.txt`
 2. **Database Connection**: Verify PostgreSQL is running and pgvector extension is installed
 3. **Langfuse Connection**: Check that Langfuse is accessible at the configured host
 4. **Missing PDFs**: Ensure PDF files are placed in the `pdf_documents/` directory
