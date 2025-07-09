@@ -1,0 +1,72 @@
+graph TD
+    subgraph "Application Layer"
+        App[FastAPI Application]
+        VectorSearch[Vector Search Engine]
+        LLMRouter[LLM Router]
+        API[Chat API Endpoints]
+    end
+
+    subgraph "Metrics Framework"
+        MetricsConfig[Metrics Configuration<br/>METRICS_BACKEND=auto/prometheus/datadog/opentelemetry/noop]
+        MetricsBackend[MetricsBackend Interface]
+        MetricsFactory[Backend Factory<br/>Auto-detection & Selection]
+    end
+
+    subgraph "Backend Implementations"
+        PrometheusBackend[Prometheus Backend<br/>- Histograms<br/>- Counters<br/>- Gauges]
+        DataDogBackend[DataDog Backend<br/>- API Key Auth<br/>- Tagged Metrics<br/>- Custom Events]
+        OpenTelemetryBackend[OpenTelemetry Backend<br/>- Cloud-native<br/>- Vendor-neutral<br/>- Spans & Traces]
+        NoOpBackend[NoOp Backend<br/>- Development<br/>- Zero overhead<br/>- Silent operation]
+    end
+
+    subgraph "External Services"
+        PrometheusServer[Prometheus Server<br/>:9090]
+        Grafana[Grafana Dashboard<br/>:3000]
+        DataDogSaaS[DataDog SaaS<br/>app.datadoghq.com]
+        OTELCollector[OTEL Collector<br/>Jaeger/Tempo/Cloud]
+    end
+
+    subgraph "Metrics Types"
+        VectorMetrics[Vector Search Metrics<br/>- vector_search_duration_seconds<br/>- vector_search_requests_total<br/>- vector_search_recall]
+        HTTPMetrics[HTTP Request Metrics<br/>- http_requests_total<br/>- http_request_duration_seconds]
+        LLMMetrics[LLM Provider Metrics<br/>- llm_provider_requests_total<br/>- llm_provider_errors_total<br/>- llm_fallback_triggered_total]
+    end
+
+    %% Application to Metrics Framework
+    App --> MetricsConfig
+    VectorSearch --> MetricsBackend
+    LLMRouter --> MetricsBackend
+    API --> MetricsBackend
+
+    %% Metrics Framework Internal
+    MetricsConfig --> MetricsFactory
+    MetricsFactory --> MetricsBackend
+    MetricsBackend --> PrometheusBackend
+    MetricsBackend --> DataDogBackend  
+    MetricsBackend --> OpenTelemetryBackend
+    MetricsBackend --> NoOpBackend
+
+    %% Backend to External Services
+    PrometheusBackend --> PrometheusServer
+    PrometheusServer --> Grafana
+    DataDogBackend --> DataDogSaaS
+    OpenTelemetryBackend --> OTELCollector
+    NoOpBackend -.-> |No output| NoOpBackend
+
+    %% Metrics Collection
+    VectorSearch --> VectorMetrics
+    API --> HTTPMetrics
+    LLMRouter --> LLMMetrics
+
+    %% Styling
+    classDef application fill:#4285F4,stroke:#333,stroke-width:2px,color:white;
+    classDef framework fill:#34A853,stroke:#333,stroke-width:2px,color:white;
+    classDef backend fill:#FBBC05,stroke:#333,stroke-width:2px,color:black;
+    classDef external fill:#EA4335,stroke:#333,stroke-width:2px,color:white;
+    classDef metrics fill:#9C27B0,stroke:#333,stroke-width:2px,color:white;
+
+    class App,VectorSearch,LLMRouter,API application;
+    class MetricsConfig,MetricsBackend,MetricsFactory framework;
+    class PrometheusBackend,DataDogBackend,OpenTelemetryBackend,NoOpBackend backend;
+    class PrometheusServer,Grafana,DataDogSaaS,OTELCollector external;
+    class VectorMetrics,HTTPMetrics,LLMMetrics metrics; 
