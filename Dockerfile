@@ -10,11 +10,14 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# copy *both* lock-files before install to keep the cache
-COPY requirements*.txt ./
+# Install uv package manager
+RUN pip install --upgrade pip uv
 
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir -r requirements-dev.txt
+# Copy *both* lock-files before install to keep the cache
+COPY requirements-dev.txt ./
+
+# Use uv to install dependencies from the requirements-dev.txt file
+RUN uv pip sync requirements-dev.txt
 
 # Create necessary directories
 RUN mkdir -p pdf_documents
@@ -25,8 +28,8 @@ COPY . .
 # Set Python path
 ENV PYTHONPATH=/app
 
-# Default command for production
+# Default command for production using uv package manager
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # Development command (used in docker-compose)
-# CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"] 
+# CMD ["uv", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
