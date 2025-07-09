@@ -1,7 +1,15 @@
+# Core dependencies from production
 -r requirements.in
 
+# Testing and development tools
 fakeredis
 pytest-asyncio
+pytest
+pytest-httpx
+pytest-cov
+pytest-asyncio
+
+# Code quality and linting
 pre-commit
 ruff
 pyupgrade
@@ -9,8 +17,6 @@ nbqa
 codespell
 yamllint
 commitizen
-pytest
-pytest-httpx
-pytest-cov
-pytest-asyncio
+
+# Interactive tools
 ipython
