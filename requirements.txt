@@ -305,6 +305,8 @@ platformdirs==4.3.8
     # via
     #   banks
     #   llama-cloud-services
+prometheus-client==0.22.1
+    # via -r requirements.in
 propcache==0.3.2
     # via
     #   aiohttp
@@ -378,7 +380,6 @@ requests==2.32.4
     #   huggingface-hub
     #   langfuse
     #   llama-index-core
-    #   opentelemetry-exporter-otlp-proto-http
     #   requests-toolbelt
     #   tiktoken
     #   transformers
@@ -454,11 +455,6 @@ typing-extensions==4.14.0
     #   huggingface-hub
     #   llama-index-core
     #   openai
-    #   opentelemetry-api
-    #   opentelemetry-exporter-otlp-proto-grpc
-    #   opentelemetry-exporter-otlp-proto-http
-    #   opentelemetry-sdk
-    #   opentelemetry-semantic-conventions
     #   pydantic
     #   pydantic-core
     #   python-oxmsg

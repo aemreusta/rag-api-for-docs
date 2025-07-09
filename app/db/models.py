@@ -2,6 +2,8 @@ from sqlalchemy import Column, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.types import UserDefinedType
 
+from app.core.config import settings
+
 Base = declarative_base()
 
 
@@ -29,7 +31,9 @@ class ContentEmbedding(Base):
     source_document = Column(String(255), nullable=False, index=True)  # PDF filename for citations
     page_number = Column(Integer, nullable=False, index=True)  # Page number for citations
     content_text = Column(Text, nullable=False)  # Actual text content shown to LLM
-    content_vector = Column(Vector(384), nullable=True)  # Vector embeddings for similarity search
+    content_vector = Column(
+        Vector(settings.EMBEDDING_DIM), nullable=True
+    )  # Vector embeddings for similarity search
 
 
 class QueryLog(Base):
