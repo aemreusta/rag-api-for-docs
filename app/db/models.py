@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.types import UserDefinedType
 
 from app.core.config import settings
