@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     # Document Settings
     PDF_DOCUMENTS_DIR: str = "pdf_documents"
 
+    # Vector Embeddings Settings
+    EMBEDDING_DIM: int = 1536  # OpenAI text-embedding-3-small dimension
+
+    # Metrics & Monitoring Settings
+    METRICS_BACKEND: str = "auto"  # auto, prometheus, datadog, opentelemetry, noop
+    DATADOG_API_KEY: str = ""  # Optional for DataDog metrics
+    PROMETHEUS_ENABLED: bool = True  # Enable Prometheus metrics endpoint
+
     # Redis for Rate Limiting
     REDIS_URL: str = "redis://:myredissecret@redis:6379/0"
     RATE_LIMIT_COUNT: int = 100

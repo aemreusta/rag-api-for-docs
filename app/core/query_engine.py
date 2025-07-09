@@ -10,6 +10,8 @@ dependency upgrade, we pro-actively patch `pydantic` with a minimal
 fallback implementation when the attribute is absent.
 """
 
+from typing import Any
+
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.chat_engine import CondenseQuestionChatEngine
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -17,6 +19,7 @@ from llama_index.vector_stores.postgres import PGVectorStore
 
 from app.core.config import settings
 from app.core.llm_router import LLMRouter
+from app.core.metrics import vector_metrics
 
 # Set up the embedding model first
 embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
@@ -30,7 +33,7 @@ vector_store = PGVectorStore.from_params(
     port=5432,
     user=settings.POSTGRES_USER,
     table_name="content_embeddings",
-    embed_dim=384,  # Match the content_embeddings table vector dimension
+    embed_dim=settings.EMBEDDING_DIM,  # Use configurable dimension from settings
 )
 index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
 
@@ -47,7 +50,9 @@ chat_engine = CondenseQuestionChatEngine.from_defaults(
 )
 
 
-def get_chat_response(question: str, session_id: str):
+@vector_metrics.time_vector_search
+def get_chat_response(question: str, session_id: str) -> Any:
+    """Get chat response with flexible performance monitoring."""
     # NOTE: For now, session_id is a placeholder. Real memory will be added in Phase 3.
     # This engine will internally condense the question but doesn't have persistent memory yet.
     response = chat_engine.chat(question)

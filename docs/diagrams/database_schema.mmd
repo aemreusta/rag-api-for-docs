@@ -2,8 +2,7 @@ graph TD
     subgraph "PostgreSQL Container"
         direction LR
         subgraph "Application DB ('app')"
-            T1[content_embeddings<br/>- id: INTEGER PK<br/>- source_document: VARCHAR(255)<br/>- page_number: INTEGER<br/>- content_text: TEXT<br/>- content_vector: VECTOR(384)]
-            T2[query_logs<br/>- id: INTEGER PK<br/>- query_text: TEXT<br/>- response_text: TEXT<br/>- session_id: VARCHAR(255)<br/><br/>Note: Deprecated in favor<br/>of structured logging]
+            T1[content_embeddings<br/>- id: INTEGER PK<br/>- source_document: VARCHAR(255)<br/>- page_number: INTEGER<br/>- content_text: TEXT<br/>- content_vector: VECTOR(1536)<br/>- Index: HNSW (m=32, ef_construction=64)]
             T3[alembic_version<br/>- version_num: VARCHAR(32) PK]
         end
 
@@ -16,15 +15,40 @@ graph TD
         end
     end
 
+    subgraph "Redis Container"
+        R1[Database 0<br/>- Rate limiting<br/>- Session management]
+        R2[Database 1<br/>- Chat memory<br/>- Provider cache]
+        R3[Database 2<br/>- Metrics cache<br/>- Query cache]
+    end
+
     subgraph "Application Services"
         App[FastAPI App<br/>Your Code]
         LangfuseSvc[Langfuse Service<br/>Pre-built Container]
+        MonitoringSvc[Monitoring<br/>Prometheus/DataDog/OTEL]
+    end
+
+    subgraph "Performance Metrics"
+        PM[Vector Search Performance<br/>P99: 1.88ms<br/>100% Recall Accuracy<br/>HNSW Index Optimized]
     end
 
     App -- "Reads/Writes RAG data" --> T1
-    App -- "Logs queries" --> T2
     App -- "Migration tracking" --> T3
+    App -- "Rate limiting & sessions" --> R1
+    App -- "Memory & caching" --> R2
+    App -- "Metrics caching" --> R3
     LangfuseSvc -- "Reads/Writes tracing data" --> LT
     LangfuseSvc -- "Stores LLM interactions" --> LO
     LangfuseSvc -- "Evaluation data" --> LS
     LangfuseSvc -- "User sessions" --> LU 
+    MonitoringSvc -- "Collects performance data" --> PM
+    App -- "Sends metrics to" --> MonitoringSvc
+
+    classDef database fill:#4285F4,stroke:#333,stroke-width:2px,color:white;
+    classDef redis fill:#DC382D,stroke:#333,stroke-width:2px,color:white;
+    classDef service fill:#34A853,stroke:#333,stroke-width:2px,color:white;
+    classDef performance fill:#FBBC05,stroke:#333,stroke-width:2px,color:black;
+
+    class T1,T3,LT,LO,LS,LU,Note1 database;
+    class R1,R2,R3 redis;
+    class App,LangfuseSvc,MonitoringSvc service;
+    class PM performance; 

@@ -22,3 +22,4 @@ redis
 async-timeout
 structlog
 python-json-logger
+prometheus_client

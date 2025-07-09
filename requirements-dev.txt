@@ -176,9 +176,7 @@ idna==3.10
     #   requests
     #   yarl
 importlib-metadata==8.7.0
-    # via
-    #   commitizen
-    #   opentelemetry-api
+    # via commitizen
 iniconfig==2.1.0
     # via pytest
 ipython==9.3.0
@@ -372,6 +370,8 @@ pluggy==1.6.0
     #   pytest-cov
 pre-commit==4.2.0
     # via -r requirements-dev.in
+prometheus-client==0.22.1
+    # via -r /Users/emre/GitHub/chatbot-api-service/requirements.in
 prompt-toolkit==3.0.51
     # via
     #   ipython
@@ -481,7 +481,6 @@ requests==2.32.4
     #   huggingface-hub
     #   langfuse
     #   llama-index-core
-    #   opentelemetry-exporter-otlp-proto-http
     #   requests-toolbelt
     #   tiktoken
     #   transformers
@@ -578,11 +577,6 @@ typing-extensions==4.14.0
     #   ipython
     #   llama-index-core
     #   openai
-    #   opentelemetry-api
-    #   opentelemetry-exporter-otlp-proto-grpc
-    #   opentelemetry-exporter-otlp-proto-http
-    #   opentelemetry-sdk
-    #   opentelemetry-semantic-conventions
     #   pydantic
     #   pydantic-core
     #   python-oxmsg
