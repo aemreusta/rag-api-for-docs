@@ -51,10 +51,15 @@ class Settings(BaseSettings):
     DATADOG_API_KEY: str = ""  # Optional for DataDog metrics
     PROMETHEUS_ENABLED: bool = True  # Enable Prometheus metrics endpoint
 
-    # Redis for Rate Limiting
+    # Redis for Rate Limiting and Caching
     REDIS_URL: str = "redis://:myredissecret@redis:6379/0"
     RATE_LIMIT_COUNT: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 86400  # 24 hours
+
+    # Cache Configuration
+    CACHE_TTL_SECONDS: int = 3600  # 1 hour default TTL for chat responses
+    CACHE_MAX_SIZE: int = 1000  # Max entries for in-memory cache fallback
+    CACHE_ENABLED: bool = True  # Enable/disable caching globally
 
     # Structured Logging Configuration
     LOG_LEVEL: str = "INFO"

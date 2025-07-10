@@ -10,6 +10,7 @@ dependency upgrade, we pro-actively patch `pydantic` with a minimal
 fallback implementation when the attribute is absent.
 """
 
+import asyncio
 from typing import Any
 
 from llama_index.core import Settings, VectorStoreIndex
@@ -17,6 +18,7 @@ from llama_index.core.chat_engine import CondenseQuestionChatEngine
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.postgres import PGVectorStore
 
+from app.core.cache import cache_key_for_chat, cached
 from app.core.config import settings
 from app.core.llm_router import LLMRouter
 from app.core.metrics import vector_metrics
@@ -50,10 +52,52 @@ chat_engine = CondenseQuestionChatEngine.from_defaults(
 )
 
 
+def _cache_key_for_chat_response(question: str, session_id: str) -> str:
+    """Generate cache key for chat responses using the LLM model name."""
+    return cache_key_for_chat(
+        question,
+        session_id,
+        llm_router._available_providers[0].get_model_name()
+        if llm_router._available_providers
+        else "",
+    )
+
+
 @vector_metrics.time_vector_search
-def get_chat_response(question: str, session_id: str) -> Any:
-    """Get chat response with flexible performance monitoring."""
+@cached(ttl=settings.CACHE_TTL_SECONDS, key_func=_cache_key_for_chat_response)
+async def get_chat_response_async(question: str, session_id: str) -> Any:
+    """Get chat response with caching and flexible performance monitoring."""
     # NOTE: For now, session_id is a placeholder. Real memory will be added in Phase 3.
     # This engine will internally condense the question but doesn't have persistent memory yet.
-    response = chat_engine.chat(question)
+
+    # Run the chat in executor since LlamaIndex chat_engine.chat is synchronous
+    loop = asyncio.get_event_loop()
+    response = await loop.run_in_executor(None, chat_engine.chat, question)
     return response
+
+
+@vector_metrics.time_vector_search
+def get_chat_response(question: str, session_id: str) -> Any:
+    """
+    Get chat response with flexible performance monitoring.
+
+    This is the synchronous wrapper for backward compatibility.
+    """
+    # Check if cache is enabled
+    if not settings.CACHE_ENABLED:
+        # Bypass cache and call directly
+        response = chat_engine.chat(question)
+        return response
+
+    # Use async version with caching
+    try:
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(get_chat_response_async(question, session_id))
+    except RuntimeError:
+        # Create new event loop if none exists
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(get_chat_response_async(question, session_id))
+        finally:
+            loop.close()
