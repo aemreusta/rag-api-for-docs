@@ -467,18 +467,44 @@ class GroqProvider(LLMProvider):
             groq_messages = self._convert_messages_to_groq_format(messages)
 
             # Prepare parameters for Groq API
-            groq_params = {
+            # Base required params
+            groq_params: dict = {
                 "model": self.model_name,
                 "messages": groq_messages,
-                "temperature": kwargs.get("temperature", 0.7),
-                "max_tokens": kwargs.get("max_tokens", 1024),
             }
 
-            # Add optional parameters if provided
-            if "top_p" in kwargs:
-                groq_params["top_p"] = kwargs["top_p"]
-            if "stream" in kwargs:
-                groq_params["stream"] = kwargs["stream"]
+            # If caller still sends deprecated ``max_tokens`` keep backward-compatibility
+            if "max_completion_tokens" in kwargs:
+                groq_params["max_completion_tokens"] = kwargs["max_completion_tokens"]
+            elif "max_tokens" in kwargs:
+                # Transparently migrate deprecated param
+                groq_params["max_completion_tokens"] = kwargs["max_tokens"]
+            else:
+                # Sensible default when nothing supplied
+                groq_params["max_completion_tokens"] = 1024
+
+            # Provide default temperature if caller omitted it
+            groq_params["temperature"] = kwargs.get("temperature", 0.7)
+
+            # Forward any other recognised Groq parameters directly – this keeps provider
+            # implementation future-proof without having to whitelist each one manually.
+            allowed_extra_params = [
+                "top_p",
+                "seed",
+                "frequency_penalty",
+                "presence_penalty",
+                "stop",
+                "tool_choice",
+                "tools",
+                "parallel_tool_calls",
+                "response_format",
+                "search_settings",
+                "user",
+                "stream",  # although not used on non-stream request, we allow it if passed
+            ]
+            for key in allowed_extra_params:
+                if key in kwargs and key not in groq_params:
+                    groq_params[key] = kwargs[key]
 
             # Make the API call with enhanced retry logic
             response = await self._retry_with_backoff(
@@ -505,17 +531,39 @@ class GroqProvider(LLMProvider):
             groq_messages = self._convert_messages_to_groq_format(messages)
 
             # Prepare parameters for Groq API
-            groq_params = {
+            groq_params: dict = {
                 "model": self.model_name,
                 "messages": groq_messages,
                 "stream": True,
-                "temperature": kwargs.get("temperature", 0.7),
-                "max_tokens": kwargs.get("max_tokens", 1024),
             }
 
-            # Add optional parameters if provided
-            if "top_p" in kwargs:
-                groq_params["top_p"] = kwargs["top_p"]
+            # Token limits
+            if "max_completion_tokens" in kwargs:
+                groq_params["max_completion_tokens"] = kwargs["max_completion_tokens"]
+            elif "max_tokens" in kwargs:
+                groq_params["max_completion_tokens"] = kwargs["max_tokens"]
+            else:
+                groq_params["max_completion_tokens"] = 1024
+
+            groq_params["temperature"] = kwargs.get("temperature", 0.7)
+
+            # Forward recognised extras
+            allowed_extra_params = [
+                "top_p",
+                "seed",
+                "frequency_penalty",
+                "presence_penalty",
+                "stop",
+                "tool_choice",
+                "tools",
+                "parallel_tool_calls",
+                "response_format",
+                "search_settings",
+                "user",
+            ]
+            for key in allowed_extra_params:
+                if key in kwargs and key not in groq_params:
+                    groq_params[key] = kwargs[key]
 
             # Make the streaming API call
             async with asyncio.timeout(self.timeout_seconds):
