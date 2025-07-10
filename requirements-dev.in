@@ -20,3 +20,7 @@ commitizen
 
 # Interactive tools
 ipython
+
+# Streamlit Demo UI
+streamlit
+streamlit-chat

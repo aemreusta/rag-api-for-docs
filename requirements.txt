@@ -480,6 +480,8 @@ unstructured-client==0.37.2
     # via unstructured
 urllib3==2.5.0
     # via requests
+uv==0.7.20
+    # via -r requirements.in
 uvicorn==0.34.3
     # via -r requirements.in
 webencodings==0.5.1
