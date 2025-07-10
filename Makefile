@@ -153,6 +153,17 @@ health-check: ## Run comprehensive health checks
 	docker-compose exec app pytest tests/test_pgvector_performance.py::TestPgVectorPerformance::test_vector_search_latency -v -s
 	@echo "=== Health Check Complete ==="
 
+## Cache Management
+cache-clear: ## Clear Redis cache
+	docker-compose exec redis redis-cli -a $(shell grep REDIS_AUTH .env | cut -d= -f2) FLUSHDB || echo "Redis connection failed, cache may be using in-memory fallback"
+
+cache-stats: ## Show cache statistics
+	@echo "=== Cache Statistics ==="
+	docker-compose exec app python -c "import asyncio; from app.core.cache import get_cache_stats; print('Cache Stats:', asyncio.run(get_cache_stats()))"
+
+cache-test: ## Test cache functionality
+	docker-compose exec app python -c "import asyncio; from app.core.cache import get_cache_backend; backend = asyncio.run(get_cache_backend()); print('Cache backend:', type(backend).__name__)"
+
 ## CI/CD Simulation
 ci-test: ## Run tests as they would run in CI
 	$(MAKE) lint
