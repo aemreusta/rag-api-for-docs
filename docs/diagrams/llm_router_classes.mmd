@@ -25,9 +25,20 @@ classDiagram
         -timeout_seconds: int
         -model_name: str
         -logger: Logger
+        -redis_client: Any
         +is_available() bool
         +complete(messages) CompletionResponse
         +stream_complete(messages) AsyncGenerator
+        +_parse_rate_limit_headers(headers) dict
+        +_store_rate_limit_info(info) void
+        +_get_stored_rate_limit_info() dict
+        +_should_skip_due_to_rate_limits() tuple[bool, int]
+        +_add_jitter(base_delay) float
+        +_handle_successful_response(result) Any
+        +_handle_timeout_error(attempt, max_retries, error) float
+        +_handle_rate_limit_error(attempt, max_retries, error, error_str) float
+        +_handle_service_error(attempt, max_retries, error_str) float
+        +_check_rate_limit_preemption(attempt) void
         +_retry_with_backoff(func, *args) Any
         +_convert_messages_to_groq_format(messages) list
         +_create_completion_response(response) CompletionResponse
