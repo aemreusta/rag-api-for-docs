@@ -16,8 +16,14 @@ sys.path.insert(0, project_root)
 
 @pytest.fixture(scope="session")
 def db_engine():
-    """Create database engine for testing."""
-    engine = create_engine(settings.DATABASE_URL)
+    """Create a database engine that is aware of the containerized environment."""
+    # Construct the URL from the container-aware settings, ensuring tests
+    # connect to the 'postgres' service, not 'localhost'.
+    test_db_url = (
+        f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@"
+        f"{settings.POSTGRES_SERVER}:5432/{settings.POSTGRES_DB}"
+    )
+    engine = create_engine(test_db_url)
     return engine
 
 

@@ -42,59 +42,117 @@ class MetricsBackend(ABC):
 class PrometheusBackend(MetricsBackend):
     """Prometheus metrics backend using prometheus_client."""
 
+    _instance = None
+    _metrics_initialized = False
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
     def __init__(self):
+        # Prevent re-initialization of metrics
+        if self._metrics_initialized:
+            return
+
         if importlib.util.find_spec("prometheus_client") is not None:
             try:
-                from prometheus_client import Counter, Gauge, Histogram
+                from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
-                # Vector search metrics
-                self.vector_search_duration = Histogram(
-                    "vector_search_duration_seconds",
-                    "Time spent on vector similarity search operations",
-                    labelnames=["status", "model"],
-                    buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
-                )
-
-                self.vector_search_requests = Counter(
-                    "vector_search_requests_total",
-                    "Total number of vector search requests",
-                    labelnames=["status", "model"],
-                )
-
-                self.vector_search_recall = Gauge(
-                    "vector_search_recall", "Vector search recall accuracy", labelnames=["k"]
-                )
-
-                # Cache metrics
-                self.cache_hits = Counter(
-                    "cache_hits_total",
-                    "Total number of cache hits",
-                    labelnames=["backend"],
-                )
-
-                self.cache_misses = Counter(
-                    "cache_misses_total",
-                    "Total number of cache misses",
-                    labelnames=["backend"],
-                )
-
-                self.cache_evictions = Counter(
-                    "cache_evictions_total",
-                    "Total number of cache evictions",
-                    labelnames=["backend"],
-                )
-
-                self.cache_errors = Counter(
-                    "cache_errors_total",
-                    "Total number of cache errors",
-                    labelnames=["backend", "operation"],
-                )
+                self._create_vector_metrics(Histogram, Counter, Gauge, REGISTRY)
+                self._create_cache_metrics(Counter, REGISTRY)
 
                 self._metrics_available = True
+                self._metrics_initialized = True
             except ImportError:
                 self._metrics_available = False
         else:
             self._metrics_available = False
+
+    def _create_vector_metrics(self, Histogram, Counter, Gauge, registry):
+        """Create vector search metrics."""
+        self.vector_search_duration = self._create_metric_safe(
+            lambda: Histogram(
+                "vector_search_duration_seconds",
+                "Time spent on vector similarity search operations",
+                labelnames=["status", "model"],
+                buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+            ),
+            "vector_search_duration_seconds",
+            registry,
+        )
+
+        self.vector_search_requests = self._create_metric_safe(
+            lambda: Counter(
+                "vector_search_requests_total",
+                "Total number of vector search requests",
+                labelnames=["status", "model"],
+            ),
+            "vector_search_requests_total",
+            registry,
+        )
+
+        self.vector_search_recall = self._create_metric_safe(
+            lambda: Gauge(
+                "vector_search_recall", "Vector search recall accuracy", labelnames=["k"]
+            ),
+            "vector_search_recall",
+            registry,
+        )
+
+    def _create_cache_metrics(self, Counter, registry):
+        """Create cache metrics."""
+        self.cache_hits = self._create_metric_safe(
+            lambda: Counter(
+                "cache_hits_total",
+                "Total number of cache hits",
+                labelnames=["backend"],
+            ),
+            "cache_hits_total",
+            registry,
+        )
+
+        self.cache_misses = self._create_metric_safe(
+            lambda: Counter(
+                "cache_misses_total",
+                "Total number of cache misses",
+                labelnames=["backend"],
+            ),
+            "cache_misses_total",
+            registry,
+        )
+
+        self.cache_evictions = self._create_metric_safe(
+            lambda: Counter(
+                "cache_evictions_total",
+                "Total number of cache evictions",
+                labelnames=["backend"],
+            ),
+            "cache_evictions_total",
+            registry,
+        )
+
+        self.cache_errors = self._create_metric_safe(
+            lambda: Counter(
+                "cache_errors_total",
+                "Total number of cache errors",
+                labelnames=["backend", "operation"],
+            ),
+            "cache_errors_total",
+            registry,
+        )
+
+    def _create_metric_safe(self, create_func, metric_name, registry):
+        """Safely create a metric, handling duplicates by finding existing ones."""
+        try:
+            return create_func()
+        except ValueError:
+            # Metric already registered, find and reuse it
+            for collector in registry._collector_to_names:
+                if hasattr(collector, "_name") and getattr(collector, "_name", "") == metric_name:
+                    return collector
+            # If we can't find it, return None to avoid errors
+            return None
 
     def record_histogram(
         self, name: str, value: float, labels: dict[str, str] | None = None
@@ -102,7 +160,11 @@ class PrometheusBackend(MetricsBackend):
         if not self._metrics_available:
             return
 
-        if name == "vector_search_duration_seconds":
+        if (
+            name == "vector_search_duration_seconds"
+            and hasattr(self, "vector_search_duration")
+            and self.vector_search_duration is not None
+        ):
             label_values = labels or {}
             self.vector_search_duration.labels(**label_values).observe(value)
 
@@ -112,15 +174,35 @@ class PrometheusBackend(MetricsBackend):
 
         label_values = labels or {}
 
-        if name == "vector_search_requests_total":
+        if (
+            name == "vector_search_requests_total"
+            and hasattr(self, "vector_search_requests")
+            and self.vector_search_requests is not None
+        ):
             self.vector_search_requests.labels(**label_values).inc()
-        elif name == "cache_hits_total":
+        elif (
+            name == "cache_hits_total"
+            and hasattr(self, "cache_hits")
+            and self.cache_hits is not None
+        ):
             self.cache_hits.labels(**label_values).inc()
-        elif name == "cache_misses_total":
+        elif (
+            name == "cache_misses_total"
+            and hasattr(self, "cache_misses")
+            and self.cache_misses is not None
+        ):
             self.cache_misses.labels(**label_values).inc()
-        elif name == "cache_evictions_total":
+        elif (
+            name == "cache_evictions_total"
+            and hasattr(self, "cache_evictions")
+            and self.cache_evictions is not None
+        ):
             self.cache_evictions.labels(**label_values).inc()
-        elif name == "cache_errors_total":
+        elif (
+            name == "cache_errors_total"
+            and hasattr(self, "cache_errors")
+            and self.cache_errors is not None
+        ):
             self.cache_errors.labels(**label_values).inc()
 
     def increment(
@@ -132,13 +214,29 @@ class PrometheusBackend(MetricsBackend):
 
         label_values = labels or {}
 
-        if name == "cache_evictions_total":
+        if (
+            name == "cache_evictions_total"
+            and hasattr(self, "cache_evictions")
+            and self.cache_evictions is not None
+        ):
             self.cache_evictions.labels(**label_values).inc(value)
-        elif name == "cache_hits_total":
+        elif (
+            name == "cache_hits_total"
+            and hasattr(self, "cache_hits")
+            and self.cache_hits is not None
+        ):
             self.cache_hits.labels(**label_values).inc(value)
-        elif name == "cache_misses_total":
+        elif (
+            name == "cache_misses_total"
+            and hasattr(self, "cache_misses")
+            and self.cache_misses is not None
+        ):
             self.cache_misses.labels(**label_values).inc(value)
-        elif name == "cache_errors_total":
+        elif (
+            name == "cache_errors_total"
+            and hasattr(self, "cache_errors")
+            and self.cache_errors is not None
+        ):
             self.cache_errors.labels(**label_values).inc(value)
         else:
             # Fallback to regular counter increment
@@ -149,7 +247,11 @@ class PrometheusBackend(MetricsBackend):
         if not self._metrics_available:
             return
 
-        if name == "vector_search_recall":
+        if (
+            name == "vector_search_recall"
+            and hasattr(self, "vector_search_recall")
+            and self.vector_search_recall is not None
+        ):
             label_values = labels or {}
             self.vector_search_recall.labels(**label_values).set(value)
 
