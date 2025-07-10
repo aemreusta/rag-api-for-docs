@@ -259,6 +259,21 @@ Edit `.env` and replace placeholder values:
 | `DATADOG_API_KEY` | `your-api-key` | Required if using DataDog backend |
 | `PROMETHEUS_ENABLED` | `true` | Enable Prometheus metrics endpoint |
 
+#### **CORS Configuration for Frontend Integration**
+
+| Key | Sample value | Notes |
+|-----|--------------|--------|
+| `CORS_ALLOW_ORIGINS` | `` (empty for dev) | Comma-separated origins; wildcard in DEBUG mode |
+| `CORS_ALLOW_METHODS` | `GET,POST,PUT,DELETE,OPTIONS` | HTTP methods for CORS |
+| `CORS_ALLOW_HEADERS` | `Authorization,Content-Type,X-API-Key` | Headers for CORS |
+| `CORS_ALLOW_CREDENTIALS` | `false` | Disable with wildcard origins |
+| `CORS_MAX_AGE` | `600` | Pre-flight cache duration (seconds) |
+
+**CORS Behavior:**
+
+- **Development** (`DEBUG=true` + `ENVIRONMENT=development`): Wildcard (`*`) when origins empty
+- **Production**: Requires explicit origins; restrictive by default
+
 #### Step-by-step .env Configuration
 
 ```bash

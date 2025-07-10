@@ -1,4 +1,4 @@
-from pydantic import ConfigDict
+from pydantic import ConfigDict, computed_field
 from pydantic_settings import BaseSettings
 
 
@@ -60,6 +60,39 @@ class Settings(BaseSettings):
     CACHE_TTL_SECONDS: int = 3600  # 1 hour default TTL for chat responses
     CACHE_MAX_SIZE: int = 1000  # Max entries for in-memory cache fallback
     CACHE_ENABLED: bool = True  # Enable/disable caching globally
+
+    # CORS Configuration
+    CORS_ALLOW_ORIGINS: str = ""  # Comma-separated list of allowed origins
+    CORS_ALLOW_METHODS: str = "GET,POST,PUT,DELETE,OPTIONS"  # HTTP methods
+    CORS_ALLOW_HEADERS: str = "Authorization,Content-Type,X-API-Key,X-Request-ID"  # Headers
+    CORS_ALLOW_CREDENTIALS: bool = False  # Allow credentials (cookies, auth headers)
+    CORS_MAX_AGE: int = 600  # Pre-flight cache duration in seconds (10 minutes)
+
+    @computed_field
+    @property
+    def cors_origins(self) -> list[str]:
+        """Parse CORS_ALLOW_ORIGINS and return appropriate origins list."""
+        # In DEBUG mode with development environment, default to wildcard if no origins specified
+        if self.DEBUG and self.ENVIRONMENT == "development" and not self.CORS_ALLOW_ORIGINS.strip():
+            return ["*"]
+
+        # Parse comma-separated origins
+        if self.CORS_ALLOW_ORIGINS.strip():
+            origins = [origin.strip() for origin in self.CORS_ALLOW_ORIGINS.split(",")]
+            # Filter out empty strings
+            return [origin for origin in origins if origin]
+
+        # No origins configured - restrictive by default
+        return []
+
+    @computed_field
+    @property
+    def cors_allow_credentials_safe(self) -> bool:
+        """Return safe credentials setting - False when using wildcard origins."""
+        # Cannot use credentials with wildcard origins per CORS spec
+        if "*" in self.cors_origins:
+            return False
+        return self.CORS_ALLOW_CREDENTIALS
 
     # Structured Logging Configuration
     LOG_LEVEL: str = "INFO"

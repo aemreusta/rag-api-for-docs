@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import chat
 from app.core.config import settings
+from app.core.cors import get_cors_config
 from app.core.logging_config import get_logger, setup_logging
 from app.core.middleware import RateLimitLoggingMiddleware, StructuredLoggingMiddleware
 from app.core.redis import redis_client
@@ -43,14 +44,9 @@ app = FastAPI(
 app.add_middleware(StructuredLoggingMiddleware)
 app.add_middleware(RateLimitLoggingMiddleware)
 
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Configure CORS using centralized configuration
+cors_config = get_cors_config()
+app.add_middleware(CORSMiddleware, **cors_config)
 
 
 @app.get("/health", status_code=200, tags=["Health"])
