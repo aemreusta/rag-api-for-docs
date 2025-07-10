@@ -290,6 +290,10 @@ class VectorSearchMetrics:
         """Record vector search recall accuracy."""
         self.backend.set_gauge("vector_search_recall", recall, {"k": str(k)})
 
+    def increment_counter(self, name: str, labels: dict[str, str] | None = None) -> None:
+        """Generic counter increment method for arbitrary metrics."""
+        self.backend.increment_counter(name, labels)
+
 
 # Global metrics instance
 vector_metrics = VectorSearchMetrics()

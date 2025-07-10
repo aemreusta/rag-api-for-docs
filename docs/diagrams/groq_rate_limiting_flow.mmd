@@ -1,0 +1,78 @@
+flowchart TD
+    subgraph "Groq Provider Rate Limiting Flow"
+        A[Incoming Request]
+        B[Check Redis Rate Limit Cache]
+        C{Quota Available?}
+        D[Preemptive Skip]
+        E[Make API Call]
+        F{API Response}
+        G[Parse Rate Limit Headers]
+        H[Store in Redis Cache]
+        I[Return Success Response]
+        J{Error Type?}
+        K[429/498 Rate Limit]
+        L[Parse Retry-After Header]
+        M[Exponential Backoff + Jitter]
+        N[Sleep & Retry]
+        O[Other Errors]
+        P[Trigger Fallback]
+        Q[Record Metrics]
+        R[Update Redis Cache]
+    end
+    
+    subgraph "Redis Cache Structure"
+        RC1["groq:rate_limit"]
+        RC2["{<br/>remaining_requests: int<br/>remaining_tokens: int<br/>retry_after_seconds: int<br/>timestamp: float<br/>}"]
+        RC3["TTL: 300s (5 minutes)"]
+    end
+    
+    subgraph "Prometheus Metrics"
+        M1["llm_provider_rate_limit_hits_total"]
+        M2["Labels: provider=groq, action=hit"]
+        M3["Labels: provider=groq, action=preemptive_skip"]
+    end
+    
+    A --> B
+    B --> C
+    C -->|Low quota<br/>≤2 requests or<br/>≤1000 tokens| D
+    C -->|Sufficient quota| E
+    D --> Q
+    Q --> M3
+    D --> P
+    
+    E --> F
+    F -->|Success| G
+    G --> H
+    H --> I
+    
+    F -->|Error| J
+    J -->|429 or 498| K
+    J -->|Other| O
+    
+    K --> Q
+    Q --> M2
+    K --> L
+    L -->|Has retry-after| M
+    L -->|No retry-after| M
+    M --> N
+    N --> E
+    
+    K --> R
+    R --> RC1
+    
+    O --> P
+    
+    RC1 --> RC2
+    RC1 --> RC3
+    
+    classDef success fill:#4CAF50,stroke:#333,stroke-width:2px,color:white;
+    classDef error fill:#F44336,stroke:#333,stroke-width:2px,color:white;
+    classDef cache fill:#9C27B0,stroke:#333,stroke-width:2px,color:white;
+    classDef metrics fill:#FF9800,stroke:#333,stroke-width:2px,color:white;
+    classDef decision fill:#2196F3,stroke:#333,stroke-width:2px,color:white;
+    
+    class I success;
+    class D,K,O,P error;
+    class B,H,R,RC1,RC2,RC3 cache;
+    class Q,M1,M2,M3 metrics;
+    class C,F,J decision; 
