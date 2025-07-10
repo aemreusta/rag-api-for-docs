@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
-from app.core.cors import get_cors_config
+from app.core.cors import get_cors_config, log_cors_rejection
 
 
 class TestCORSConfiguration:
@@ -127,6 +127,195 @@ class TestCORSConfiguration:
                 assert config["allow_methods"] == ["GET", "POST", "PUT"]
                 assert config["allow_headers"] == ["Authorization", "Content-Type"]
                 assert config["max_age"] == 300
+
+    def test_environment_override_staging_to_production(self):
+        """Test environment override from staging to production."""
+        with patch.dict(
+            os.environ,
+            {
+                "DEBUG": "false",
+                "ENVIRONMENT": "staging",
+                "CORS_ALLOW_ORIGINS": "https://staging.example.com",
+            },
+        ):
+            settings = Settings()
+            assert settings.cors_origins == ["https://staging.example.com"]
+            assert settings.ENVIRONMENT == "staging"
+
+        # Override to production
+        with patch.dict(
+            os.environ,
+            {
+                "DEBUG": "false",
+                "ENVIRONMENT": "production",
+                "CORS_ALLOW_ORIGINS": "https://example.com",
+            },
+        ):
+            settings = Settings()
+            assert settings.cors_origins == ["https://example.com"]
+            assert settings.ENVIRONMENT == "production"
+
+    def test_environment_override_complex_scenarios(self):
+        """Test complex environment override scenarios."""
+        # Test multiple environment switches
+        environments = [
+            ("development", True, "", ["*"]),
+            ("staging", False, "https://staging.example.com", ["https://staging.example.com"]),
+            (
+                "production",
+                False,
+                "https://example.com,https://app.example.com",
+                ["https://example.com", "https://app.example.com"],
+            ),
+            ("testing", True, "", []),  # Testing environment without default wildcard
+        ]
+
+        for env, debug, origins, expected in environments:
+            with patch.dict(
+                os.environ,
+                {
+                    "DEBUG": str(debug).lower(),
+                    "ENVIRONMENT": env,
+                    "CORS_ALLOW_ORIGINS": origins,
+                },
+            ):
+                settings = Settings()
+                assert settings.cors_origins == expected, f"Failed for environment: {env}"
+
+    def test_cors_headers_and_methods_customization(self):
+        """Test that CORS methods and headers can be customized via environment."""
+        custom_methods = "GET,POST,PATCH,DELETE,OPTIONS"
+        custom_headers = "Authorization,Content-Type,X-Custom-Header,X-Request-ID"
+
+        with patch.dict(
+            os.environ,
+            {
+                "CORS_ALLOW_METHODS": custom_methods,
+                "CORS_ALLOW_HEADERS": custom_headers,
+                "CORS_MAX_AGE": "1200",
+            },
+        ):
+            settings = Settings()
+            assert settings.CORS_ALLOW_METHODS == custom_methods
+            assert settings.CORS_ALLOW_HEADERS == custom_headers
+            assert settings.CORS_MAX_AGE == 1200
+
+    def test_cors_boolean_environment_override(self):
+        """Test CORS boolean settings environment override."""
+        with patch.dict(
+            os.environ,
+            {
+                "CORS_ALLOW_CREDENTIALS": "true",
+                "CORS_ALLOW_ORIGINS": "https://example.com",
+            },
+        ):
+            settings = Settings()
+            assert settings.CORS_ALLOW_CREDENTIALS is True
+            assert settings.cors_allow_credentials_safe is True
+
+        # Test false override
+        with patch.dict(
+            os.environ,
+            {
+                "CORS_ALLOW_CREDENTIALS": "false",
+                "CORS_ALLOW_ORIGINS": "https://example.com",
+            },
+        ):
+            settings = Settings()
+            assert settings.CORS_ALLOW_CREDENTIALS is False
+            assert settings.cors_allow_credentials_safe is False
+
+
+class TestCORSLogging:
+    """Test CORS logging functionality."""
+
+    @patch("app.core.cors.logger")
+    def test_cors_config_logging_in_debug(self, mock_logger):
+        """Test that CORS configuration is logged in DEBUG mode."""
+        with patch.dict(
+            os.environ,
+            {
+                "DEBUG": "true",
+                "ENVIRONMENT": "development",
+                "CORS_ALLOW_ORIGINS": "https://example.com",
+                "CORS_ALLOW_METHODS": "GET,POST",
+                "CORS_ALLOW_HEADERS": "Authorization,Content-Type",
+                "CORS_MAX_AGE": "600",
+            },
+        ):
+            from app.core.config import Settings
+
+            with patch("app.core.cors.settings", Settings()):
+                get_cors_config()
+
+                # Verify logging was called
+                mock_logger.info.assert_called_once()
+                call_args = mock_logger.info.call_args
+                assert "Configuring CORS middleware" in call_args[0][0]
+
+    @patch("app.core.cors.logger")
+    def test_wildcard_warning_in_production(self, mock_logger):
+        """Test that wildcard warning is logged in non-development environments."""
+        with patch.dict(
+            os.environ,
+            {
+                "DEBUG": "true",
+                "ENVIRONMENT": "production",
+                "CORS_ALLOW_ORIGINS": "*",  # Explicit wildcard in production
+            },
+        ):
+            from app.core.config import Settings
+
+            with patch("app.core.cors.settings", Settings()):
+                get_cors_config()
+
+                # Verify warning was logged
+                mock_logger.warning.assert_called_once()
+                call_args = mock_logger.warning.call_args
+                assert (
+                    "CORS wildcard (*) detected in non-development environment" in call_args[0][0]
+                )
+
+    @patch("app.core.cors.logger")
+    def test_cors_rejection_logging(self, mock_logger):
+        """Test CORS rejection logging functionality."""
+        with patch.dict(
+            os.environ,
+            {
+                "DEBUG": "true",
+                "ENVIRONMENT": "development",
+            },
+        ):
+            from app.core.config import Settings
+
+            with patch("app.core.cors.settings", Settings()):
+                log_cors_rejection("https://malicious-site.com", "GET", "/api/v1/chat")
+
+                # Verify rejection was logged
+                mock_logger.warning.assert_called_once()
+                call_args = mock_logger.warning.call_args
+                assert "CORS request rejected" in call_args[0][0]
+
+    @patch("app.core.cors.logger")
+    def test_no_logging_when_debug_false(self, mock_logger):
+        """Test that CORS logging is disabled when DEBUG is false."""
+        with patch.dict(
+            os.environ,
+            {
+                "DEBUG": "false",
+                "ENVIRONMENT": "production",
+                "CORS_ALLOW_ORIGINS": "https://example.com",
+            },
+        ):
+            from app.core.config import Settings
+
+            with patch("app.core.cors.settings", Settings()):
+                get_cors_config()
+                log_cors_rejection("https://malicious-site.com", "GET", "/api/v1/chat")
+
+                # Verify no logging occurred
+                mock_logger.info.assert_not_called()
+                mock_logger.warning.assert_not_called()
 
 
 class TestCORSIntegration:
