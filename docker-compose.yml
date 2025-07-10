@@ -246,3 +246,21 @@ services:
     depends_on:
       langfuse: {condition: service_started}          # wait for migrations
     networks: [app-network]
+
+  # ───────────────────────────── Streamlit Demo UI ──────────────────────────────
+  demo-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: streamlit run ui/demo_ui.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./ui:/app/ui  # Mount the entire ui directory
+    <<: *default-env  # Include .env file for unified configuration
+    environment:
+      - API_BASE_URL=http://app:8000  # Communicates with 'app' service over Docker network
+      - API_KEY=${API_KEY}  # Pass API key from central .env file
+    depends_on:
+      app: {condition: service_started}
+    networks: [app-network]

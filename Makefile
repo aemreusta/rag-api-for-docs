@@ -19,13 +19,13 @@ help: ## Show this help message
 build: ## Build or rebuild services
 	docker-compose build
 
-up: ## Start all services in the background
+up: ## Start all services (FastAPI + Demo UI + PostgreSQL + Redis + etc.)
 	docker-compose up -d
 
 down: ## Stop all services
 	docker-compose down
 
-logs: ## View output from containers
+logs: ## View output from all containers
 	docker-compose logs -f
 
 shell: ## Open a shell in the app container
@@ -168,4 +168,4 @@ cache-test: ## Test cache functionality
 ci-test: ## Run tests as they would run in CI
 	$(MAKE) lint
 	$(MAKE) test-all
-	$(MAKE) test-cov 
+	$(MAKE) test-cov
