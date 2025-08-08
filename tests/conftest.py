@@ -3,7 +3,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
@@ -35,6 +35,11 @@ def db_session(db_engine) -> Generator[Session, None, None]:
     session = SessionLocal()
 
     try:
+        # Ensure pgvector extension is available for tests
+        with db_engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            conn.commit()
+
         # Create tables if they don't exist (for testing)
         Base.metadata.create_all(bind=db_engine)
         yield session
