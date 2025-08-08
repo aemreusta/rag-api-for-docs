@@ -33,44 +33,44 @@ shell: ## Open a shell in the app container
 
 ## Testing
 test: ## Run all tests (default test suite)
-	docker-compose exec app pytest -v
+	docker-compose exec app uv run pytest -v
 
 test-all: ## Run all tests with verbose output and performance metrics
-	docker-compose exec app pytest -v -s
+	docker-compose exec app uv run pytest -v -s
 
 test-pgvector: ## Run pgvector performance and configuration tests
-	docker-compose exec app pytest tests/test_pgvector_performance.py tests/test_pgvector_prometheus.py -v -s
+	docker-compose exec app uv run pytest tests/test_pgvector_performance.py tests/test_pgvector_prometheus.py -v -s
 
 test-metrics: ## Run flexible metrics system tests
-	docker-compose exec app pytest tests/test_flexible_metrics.py -v
+	docker-compose exec app uv run pytest tests/test_flexible_metrics.py -v
 
 test-performance: ## Run performance tests with detailed output
-	docker-compose exec app pytest tests/test_pgvector_performance.py::TestPgVectorPerformance::test_vector_search_latency -v -s
+	docker-compose exec app uv run pytest tests/test_pgvector_performance.py::TestPgVectorPerformance::test_vector_search_latency -v -s
 
 test-unit: ## Run unit tests only (fast)
-	docker-compose exec app pytest -m "not integration" -v
+	docker-compose exec app uv run pytest -m "not integration" -v
 
 test-integration: ## Run integration tests only
-	docker-compose exec app pytest tests/test_chat.py tests/test_pgvector_performance.py -v
+	docker-compose exec app uv run pytest tests/test_chat.py tests/test_pgvector_performance.py -v
 
 test-cov: ## Run tests with coverage report
-	docker-compose exec app pytest --cov=app --cov-report=term-missing --cov-report=html
+	docker-compose exec app uv run pytest --cov=app --cov-report=term-missing --cov-report=html
 
 test-cov-pgvector: ## Run pgvector tests with coverage
-	docker-compose exec app pytest tests/test_pgvector_performance.py tests/test_pgvector_prometheus.py --cov=app.core.query_engine --cov=app.db.models --cov-report=term-missing
+	docker-compose exec app uv run pytest tests/test_pgvector_performance.py tests/test_pgvector_prometheus.py --cov=app.core.query_engine --cov=app.db.models --cov-report=term-missing
 
 ## Code Quality
 lint: ## Run linting
-	docker-compose exec app ruff check .
+	docker-compose exec app uv run ruff check .
 
 lint-fix: ## Run linting with auto-fix
-	docker-compose exec app ruff check . --fix
+	docker-compose exec app uv run ruff check . --fix
 
 format: ## Format code
-	docker-compose exec app ruff format .
+	docker-compose exec app uv run ruff format .
 
 type-check: ## Run type checking (if mypy available)
-	docker-compose exec app python -m mypy app/ || echo "mypy not available, skipping type check"
+	docker-compose exec app uv run python -m mypy app/ || echo "mypy not available, skipping type check"
 
 quality-check: ## Run all quality checks (lint + format + type)
 	$(MAKE) lint
@@ -90,20 +90,20 @@ db-status: ## Show database status and pgvector info
 	docker-compose exec postgres psql -U postgres -d app -c "\d content_embeddings"
 
 migrate: ## Run database migrations
-	docker-compose exec app alembic upgrade head
+	docker-compose exec app uv run alembic upgrade head
 
 migrate-create: ## Create a new migration
-	docker-compose exec app alembic revision --autogenerate -m "$(name)"
+	docker-compose exec app uv run alembic revision --autogenerate -m "$(name)"
 
 ingest: ## Run data ingestion (one-time setup)
-	docker-compose exec app python scripts/ingest_simple.py
+	docker-compose exec app uv run python scripts/ingest_simple.py
 
 ## Dependencies
 deps-compile: ## Compile dependencies
-	docker-compose exec app pip-compile requirements.in
+	docker-compose exec app uv pip compile requirements.in -o requirements.txt
 
 deps-sync: ## Sync dependencies
-	docker-compose exec app pip-sync requirements.txt
+	docker-compose exec app uv pip sync --system requirements.txt
 
 ## Cleanup
 clean: ## Remove all containers, volumes, and images
@@ -125,7 +125,7 @@ clickhouse-test: ## Run ClickHouse smoke tests
 	@echo "Testing ClickHouse authentication..."
 	docker-compose exec clickhouse clickhouse-client -u langfuse --password $(CLICKHOUSE_PASSWORD) -q 'SELECT 1'
 	@echo "Testing Langfuse health..."
-	curl -f http://localhost:3000/api/public/health
+	curl -f http://localhost:13000/api/public/health
 
 langfuse-logs: ## View Langfuse service logs
 	docker-compose logs -f langfuse langfuse-worker clickhouse 
@@ -141,7 +141,7 @@ rebuild-app: ## Rebuild only the app service
 health-check: ## Run comprehensive health checks
 	@echo "=== System Health Check ==="
 	@echo "1. Testing container connectivity..."
-	docker-compose exec app python -c "print('✅ App container: OK')"
+	docker-compose exec app uv run python -c "print('✅ App container: OK')"
 	@echo "2. Testing database connectivity..."
 	docker-compose exec postgres psql -U postgres -d app -c "SELECT '✅ Database: OK';"
 	@echo "3. Testing Redis connectivity..."
@@ -150,7 +150,7 @@ health-check: ## Run comprehensive health checks
 	$(MAKE) test-pgvector
 	@echo "5. Testing vector search performance..."
 	@echo "=== Vector Search Performance Benchmark ==="
-	docker-compose exec app pytest tests/test_pgvector_performance.py::TestPgVectorPerformance::test_vector_search_latency -v -s
+	docker-compose exec app uv run pytest tests/test_pgvector_performance.py::TestPgVectorPerformance::test_vector_search_latency -v -s
 	@echo "=== Health Check Complete ==="
 
 ## Cache Management
@@ -159,10 +159,10 @@ cache-clear: ## Clear Redis cache
 
 cache-stats: ## Show cache statistics
 	@echo "=== Cache Statistics ==="
-	docker-compose exec app python -c "import asyncio; from app.core.cache import get_cache_stats; print('Cache Stats:', asyncio.run(get_cache_stats()))"
+	docker-compose exec app uv run python -c "import asyncio; from app.core.cache import get_cache_stats; print('Cache Stats:', asyncio.run(get_cache_stats()))"
 
 cache-test: ## Test cache functionality
-	docker-compose exec app python -c "import asyncio; from app.core.cache import get_cache_backend; backend = asyncio.run(get_cache_backend()); print('Cache backend:', type(backend).__name__)"
+	docker-compose exec app uv run python -c "import asyncio; from app.core.cache import get_cache_backend; backend = asyncio.run(get_cache_backend()); print('Cache backend:', type(backend).__name__)"
 
 ## CI/CD Simulation
 ci-test: ## Run tests as they would run in CI
