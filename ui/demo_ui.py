@@ -296,14 +296,49 @@ with col_right:
 
     elif info_page == "Ayarlar":
         st.subheader("Ayarlar")
-        selected_model_name = st.selectbox(
-            "🤖 Model Seçimi",
-            options=list(MODEL_OPTIONS.keys()),
-            index=list(MODEL_OPTIONS.keys()).index(st.session_state.selected_model_name),
-            help="Kullanılacak AI modelini seçin",
-        )
-        st.session_state.selected_model_name = selected_model_name
-        st.session_state.selected_model_id = MODEL_OPTIONS[selected_model_name]
+        # Server-validated model fetch
+        if st.button("🔍 Mevcut Modelleri Getir (OpenRouter)"):
+            try:
+                headers = {"X-API-Key": API_KEY}
+                r = requests.get(
+                    f"{API_BASE_URL}/api/v1/models?provider=openrouter&only_gemini=true",
+                    headers=headers,
+                    timeout=10,
+                )
+                r.raise_for_status()
+                data = r.json()
+                models = data.get("models", [])
+                if models:
+                    st.session_state["available_models"] = models
+                    st.success(f"{len(models)} model bulundu.")
+                else:
+                    st.warning("Uygun model bulunamadı.")
+            except requests.RequestException as e:
+                st.error(f"Modeller alınamadı: {e}")
+
+        models = st.session_state.get("available_models", [])
+        if models:
+            # Build a selectbox from fetched models
+            model_options = [m["name"] for m in models]
+            default_index = 0
+            selected_display = st.selectbox(
+                "🤖 Model Seçimi (OpenRouter)", options=model_options, index=default_index
+            )
+            # Map back to id
+            chosen = next((m for m in models if m["name"] == selected_display), None)
+            if chosen:
+                st.session_state.selected_model_name = selected_display
+                st.session_state.selected_model_id = chosen["id"]
+        else:
+            # Fallback to static list if not fetched
+            selected_model_name = st.selectbox(
+                "🤖 Model Seçimi",
+                options=list(MODEL_OPTIONS.keys()),
+                index=list(MODEL_OPTIONS.keys()).index(st.session_state.selected_model_name),
+                help="Kullanılacak AI modelini seçin",
+            )
+            st.session_state.selected_model_name = selected_model_name
+            st.session_state.selected_model_id = MODEL_OPTIONS[selected_model_name]
 
         st.subheader("🎛️ Model Parametreleri")
         st.session_state.temperature = st.slider(
