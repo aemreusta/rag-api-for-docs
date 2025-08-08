@@ -688,11 +688,23 @@ class GoogleAIStudioProvider(LLMProvider):
     def __init__(self, timeout_seconds: int = 30):
         super().__init__(ProviderType.GOOGLE, timeout_seconds)
         self.model_name = settings.GOOGLE_MODEL_NAME
+        # Only construct client when both key and model name are valid strings
         if self.is_available():
-            self.client = Gemini(api_key=settings.GOOGLE_AI_STUDIO_API_KEY, model=self.model_name)
+            try:
+                self.client = Gemini(
+                    api_key=settings.GOOGLE_AI_STUDIO_API_KEY, model=self.model_name
+                )
+            except Exception as e:
+                # Defer availability if SDK rejects model/key types
+                self.logger.warning("Failed to initialize Google Gemini client", error=str(e))
+                self.client = None
 
     def is_available(self) -> bool:
-        return bool(settings.GOOGLE_AI_STUDIO_API_KEY)
+        return (
+            isinstance(settings.GOOGLE_AI_STUDIO_API_KEY, str)
+            and bool(settings.GOOGLE_AI_STUDIO_API_KEY)
+            and isinstance(self.model_name, str)
+        )
 
     async def complete(self, messages: list[ChatMessage] | str, **kwargs) -> CompletionResponse:
         messages = self._ensure_messages(messages)

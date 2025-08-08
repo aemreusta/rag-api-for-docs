@@ -69,7 +69,7 @@ async def handle_chat(request: ChatRequest):
             try:
                 from llama_index.core.base.llms.types import ChatMessage, MessageRole
 
-                llm_result = llm_router.complete(
+                llm_result = await llm_router.acomplete(
                     [ChatMessage(role=MessageRole.USER, content=request.question)]
                 )
                 llm_text = getattr(llm_result, "text", None) or str(llm_result)
