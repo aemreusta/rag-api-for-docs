@@ -1,8 +1,9 @@
 import time
 
 import langfuse
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.deps import rate_limit
 from app.core.config import settings
 from app.core.logging_config import get_logger, get_trace_id
 from app.core.query_engine import get_chat_response, get_chat_response_async, llm_router
@@ -19,7 +20,7 @@ langfuse_client = langfuse.Langfuse(
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def handle_chat(request: ChatRequest):
+async def handle_chat(request: ChatRequest, _rl: None = Depends(rate_limit)):
     """
     Handle chat requests with structured logging and trace correlation.
     """
@@ -125,5 +126,6 @@ async def handle_chat(request: ChatRequest):
         )
 
         generation.end(level="ERROR", status_message=str(e))
-        # Return a stable empty response instead of propagating 500s to the UI/clients
-        return ChatResponse(answer="Empty Response", sources=[])
+        # Preserve existing test expectations: return 500 with friendly message
+        msg = "Üzgünüm, şu anda yanıt veremiyorum. Lütfen kısa bir süre sonra tekrar deneyin."
+        raise HTTPException(status_code=500, detail=msg) from None

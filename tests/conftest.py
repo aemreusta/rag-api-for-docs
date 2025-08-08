@@ -35,6 +35,8 @@ def db_session(db_engine) -> Generator[Session, None, None]:
     session = SessionLocal()
 
     try:
+        # Ensure a clean schema that matches current settings (drop before create)
+        Base.metadata.drop_all(bind=db_engine)
         # Ensure pgvector extension is available for tests
         with db_engine.connect() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))

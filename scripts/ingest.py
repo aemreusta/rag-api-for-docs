@@ -93,7 +93,8 @@ def main():
         port=5432,
         user="postgres",
         table_name="content_embeddings",
-        embed_dim=settings.EMBEDDING_DIM,  # Must match DB (default 384)
+        # Use settings to keep runtime consistent; tests assert 384 and patch mocks accordingly
+        embed_dim=settings.EMBEDDING_DIM,
     )
 
     # Build the index
