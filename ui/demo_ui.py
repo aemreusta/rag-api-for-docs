@@ -18,7 +18,7 @@ st.set_page_config(
     page_title="Hürriyet Partisi AI Gateway",
     page_icon="🚀",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 st.title("🚀 Hürriyet Partisi AI Gateway")
@@ -31,6 +31,14 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "rate_limit_info" not in st.session_state:
     st.session_state.rate_limit_info = {"limit": 0, "remaining": 0, "reset": 0}
+if "selected_model_name" not in st.session_state:
+    st.session_state.selected_model_name = "Gemini Pro (OpenRouter)"
+if "selected_model_id" not in st.session_state:
+    st.session_state.selected_model_id = "google/gemini-1.5-pro-latest"
+if "temperature" not in st.session_state:
+    st.session_state.temperature = 0.7
+if "max_tokens" not in st.session_state:
+    st.session_state.max_tokens = 1000
 
 # --- Configuration (Securely from Environment) ---
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
@@ -187,31 +195,41 @@ def format_time_remaining(reset_timestamp: int) -> str:
         return f"{hours}sa"
 
 
-# --- Sidebar Configuration ---
+# --- Clean Sidebar (minimal brand only) ---
 with st.sidebar:
-    st.header("⚙️ Ayarlar")
+    st.markdown("## 🏛️")
+    st.caption("Hürriyet Partisi AI Gateway")
 
-    # Model selection
+# --- Main Page Tabs ---
+chat_tab, settings_tab, status_tab = st.tabs(["💬 Sohbet", "⚙️ Ayarlar", "📊 Durum"])
+
+with settings_tab:
+    st.subheader("Ayarlar")
     selected_model_name = st.selectbox(
         "🤖 Model Seçimi",
         options=list(MODEL_OPTIONS.keys()),
-        index=0,
+        index=list(MODEL_OPTIONS.keys()).index(st.session_state.selected_model_name),
         help="Kullanılacak AI modelini seçin",
     )
-    selected_model = MODEL_OPTIONS[selected_model_name]
+    st.session_state.selected_model_name = selected_model_name
+    st.session_state.selected_model_id = MODEL_OPTIONS[selected_model_name]
 
-    # Model parameters (future feature - currently display only)
     st.subheader("🎛️ Model Parametreleri")
-    temperature = st.slider(
+    st.session_state.temperature = st.slider(
         "Yaratıcılık (Temperature)",
         0.0,
         2.0,
-        0.7,
+        st.session_state.temperature,
         0.1,
         help="Yüksek değerler daha yaratıcı, düşük değerler daha tutarlı yanıtlar üretir",
     )
-    max_tokens = st.slider(
-        "Maksimum Kelime", 100, 4000, 1000, 100, help="Yanıtın maksimum uzunluğu"
+    st.session_state.max_tokens = st.slider(
+        "Maksimum Kelime",
+        100,
+        4000,
+        st.session_state.max_tokens,
+        100,
+        help="Yanıtın maksimum uzunluğu",
     )
 
     st.info(
@@ -219,10 +237,9 @@ with st.sidebar:
         "Gelecekteki sürümlerde aktif olacaktır."
     )
 
-    # Session info
+with status_tab:
     st.subheader("📱 Oturum Bilgileri")
     st.caption(f"**Oturum ID:** `{st.session_state.session_id[:8]}...`")
-
     if st.button("🔄 Oturumu Sıfırla", help="Yeni bir oturum başlatır ve geçmişi temizler"):
         st.session_state.session_id = str(uuid.uuid4())
         st.session_state.messages = []
@@ -231,32 +248,25 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
-
-    # Rate limit status
     st.subheader("🚦 Hız Sınırı Durumu")
     rate_limit_container = st.container()
 
-    # Auto-refresh rate limit on first load
     if st.session_state.rate_limit_info["limit"] == 0:
         update_rate_limit_status()
-
-    # Manual refresh button
     if st.button("🔄 Durumu Yenile", help="Hız sınırı durumunu günceller"):
         update_rate_limit_status()
 
-    # Display rate limit info
     info = st.session_state.rate_limit_info
     if info["limit"] > 0:
         remaining_pct = (info["remaining"] / info["limit"]) * 100
         time_remaining = format_time_remaining(info["reset"])
 
         rate_limit_container.progress(remaining_pct / 100)
-        rate_limit_container.info(f"""
-        **Kalan İstek:** {info["remaining"]}/{info["limit"]}
-        **Sıfırlanma:** {time_remaining}
-        """)
+        rate_limit_container.info(
+            f"**Kalan İstek:** {info['remaining']}/{info['limit']}  \n"
+            f"**Sıfırlanma:** {time_remaining}"
+        )
 
-        # Warning for low remaining requests
         if info["remaining"] <= 5 and info["remaining"] > 0:
             st.warning(f"⚠️ Sadece {info['remaining']} isteğiniz kaldı!")
         elif info["remaining"] == 0:
@@ -265,59 +275,54 @@ with st.sidebar:
         rate_limit_container.info("🔍 Hız sınırı durumu yükleniyor...")
 
 # --- Main Chat Interface ---
-st.subheader("💬 Sohbet")
+with chat_tab:
+    st.subheader("💬 Sohbet")
 
-# Display chat history
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-        # Display sources for assistant messages
-        if message["role"] == "assistant" and "sources" in message:
-            format_sources(message["sources"])
+            if message["role"] == "assistant" and "sources" in message:
+                format_sources(message["sources"])
 
-# Chat input
-if prompt := st.chat_input("Parti politikaları hakkında soru sorun..."):
-    # Check rate limit before processing
-    if (
-        st.session_state.rate_limit_info.get("remaining", 1) <= 0
-        and st.session_state.rate_limit_info.get("limit", 0) > 0
-    ):
-        st.error("🚫 Hız sınırınız doldu. Lütfen sıfırlanmasını bekleyin.")
-    else:
-        # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": prompt})
+    # Chat input
+    if prompt := st.chat_input("Parti politikaları hakkında soru sorun..."):
+        if (
+            st.session_state.rate_limit_info.get("remaining", 1) <= 0
+            and st.session_state.rate_limit_info.get("limit", 0) > 0
+        ):
+            st.error("🚫 Hız sınırınız doldu. Lütfen sıfırlanmasını bekleyin.")
+        else:
+            st.session_state.messages.append({"role": "user", "content": prompt})
 
-        # Display user message
-        with st.chat_message("user"):
-            st.markdown(prompt)
+            with st.chat_message("user"):
+                st.markdown(prompt)
 
-        # Get assistant response
-        with st.chat_message("assistant"):
-            with st.spinner("🤔 Düşünüyor..."):
-                response = get_chatbot_response(prompt, selected_model)
+            with st.chat_message("assistant"):
+                with st.spinner("🤔 Düşünüyor..."):
+                    response = get_chatbot_response(prompt, st.session_state.selected_model_id)
 
-            if response:
-                try:
-                    data = response.json()
-                    answer = data.get("answer", "Yanıt bulunamadı.")
-                    sources = data.get("sources", [])
+                if response:
+                    try:
+                        data = response.json()
+                        answer = data.get("answer", "Yanıt bulunamadı.")
+                        sources = data.get("sources", [])
 
-                    # Display answer
-                    st.markdown(answer)
+                        st.markdown(answer)
+                        format_sources(sources)
 
-                    # Display sources
-                    format_sources(sources)
+                        assistant_message = {
+                            "role": "assistant",
+                            "content": answer,
+                            "sources": sources,
+                        }
+                        st.session_state.messages.append(assistant_message)
 
-                    # Add assistant response to chat history
-                    assistant_message = {"role": "assistant", "content": answer, "sources": sources}
-                    st.session_state.messages.append(assistant_message)
+                        update_rate_limit_status()
 
-                    # Update rate limit info after successful response
-                    update_rate_limit_status()
-
-                except requests.exceptions.JSONDecodeError:
-                    st.error("🔧 Sunucu yanıtı işlenemedi. Lütfen tekrar deneyin.")
+                    except requests.exceptions.JSONDecodeError:
+                        st.error("🔧 Sunucu yanıtı işlenemedi. Lütfen tekrar deneyin.")
 
 # --- Footer ---
 st.divider()
@@ -326,7 +331,7 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.caption("🏛️ **Hürriyet Partisi AI Gateway**")
 with col2:
-    st.caption(f"🤖 **Aktif Model:** {selected_model_name}")
+    st.caption(f"🤖 **Aktif Model:** {st.session_state.selected_model_name}")
 with col3:
     st.caption(f"🔗 **API:** {API_BASE_URL}")
 
@@ -337,7 +342,7 @@ with st.expander("⚙️ Yapılandırma Bilgileri", expanded=False):
             "session_id": st.session_state.session_id,
             "message_count": len(st.session_state.messages),
             "rate_limit_info": st.session_state.rate_limit_info,
-            "selected_model": selected_model,
+            "selected_model": st.session_state.selected_model_id,
             "api_base_url": API_BASE_URL,
             "config_source": "Environment Variables (.env)",
             "api_key_configured": bool(API_KEY),
