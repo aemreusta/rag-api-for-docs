@@ -259,8 +259,8 @@ services:
       - ./ui:/app/ui  # Mount the entire ui directory
     <<: *default-env  # Include .env file for unified configuration
     environment:
-      - API_BASE_URL=http://app:8000  # Communicates with 'app' service over Docker network (internal)
-      - API_KEY=${API_KEY}  # Pass API key from central .env file
+      - API_BASE_URL=http://host.docker.internal:18000
+      - API_KEY=${API_KEY}
     depends_on:
       app: {condition: service_started}
     networks: [app-network]
