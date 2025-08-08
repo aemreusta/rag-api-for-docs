@@ -112,6 +112,7 @@ def get_chatbot_response(question: str, model: str) -> requests.Response | None:
         return response
     except requests.exceptions.HTTPError as e:
         status_code = e.response.status_code
+        # Do not display raw HTTP error banners for 5xx; return None to trigger friendly fallback
         error_msg = f"HTTP Hata {status_code}: "
 
         try:
@@ -128,7 +129,8 @@ def get_chatbot_response(question: str, model: str) -> requests.Response | None:
             # Automatically update rate limit info after 429
             update_rate_limit_status()
         elif status_code >= 500:
-            st.error(f"{error_msg}Sunucu hatası. Lütfen daha sonra tekrar deneyin.")
+            # Suppress banner; handled by caller as a friendly fallback
+            return None
         else:
             st.error(f"{error_msg}{error_detail}")
 

@@ -33,7 +33,7 @@ class ContentEmbedding(Base):
     content_text = Column(Text, nullable=False)  # Actual text content shown to LLM
     content_vector = Column(
         Vector(settings.EMBEDDING_DIM), nullable=True
-    )  # Vector embeddings for similarity search
+    )  # Vector embeddings for similarity search (configurable, default 384)
 
 
 class QueryLog(Base):

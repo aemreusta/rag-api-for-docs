@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     PDF_DOCUMENTS_DIR: str = "pdf_documents"
 
     # Vector Embeddings Settings
-    EMBEDDING_DIM: int = 1536  # OpenAI text-embedding-3-small dimension
+    EMBEDDING_DIM: int = 384  # Dimension for MiniLM/bge-small style local embeddings
 
     # Metrics & Monitoring Settings
     METRICS_BACKEND: str = "auto"  # auto, prometheus, datadog, opentelemetry, noop
