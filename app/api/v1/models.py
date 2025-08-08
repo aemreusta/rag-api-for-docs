@@ -10,7 +10,9 @@ router = APIRouter()
 @router.get("/providers/validate", dependencies=[Depends(get_api_key)])
 async def validate_provider_key(
     provider: str = Query(..., pattern="^(openrouter|groq|google)$"),
-    api_key: str = Query(..., description="API key to validate for the selected provider"),
+    api_key: str | None = Query(
+        None, description="API key to validate; if omitted, server-configured key will be used"
+    ),
 ):
     """Validate a provider API key by calling a lightweight endpoint.
 
@@ -19,6 +21,18 @@ async def validate_provider_key(
     - google: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
       with a trivial prompt
     """
+    # Pick effective key (prefer explicit param, otherwise server config)
+    if api_key is None:
+        if provider == "openrouter":
+            api_key = settings.OPENROUTER_API_KEY
+        elif provider == "groq":
+            api_key = settings.GROQ_API_KEY
+        else:  # google
+            api_key = settings.GOOGLE_AI_STUDIO_API_KEY
+
+    if not api_key:
+        return {"provider": provider, "valid": False, "status": 0, "detail": "key_not_configured"}
+
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             if provider == "openrouter":

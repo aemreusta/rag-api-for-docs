@@ -24,6 +24,28 @@ st.set_page_config(
 st.title("🚀 Hürriyet Partisi AI Gateway")
 st.markdown("*Parti politikaları hakkında AI destekli soru-cevap sistemi*")
 
+
+# Validate configured provider keys on first load
+def _validate_on_load() -> None:
+    try:
+        headers = {"X-API-Key": API_KEY}
+        for prov in ["openrouter", "groq", "google"]:
+            r = requests.get(
+                f"{API_BASE_URL}/api/v1/providers/validate",
+                headers=headers,
+                params={"provider": prov},
+                timeout=6,
+            )
+            if r.ok and r.json().get("valid"):
+                st.session_state.verified_keys[prov] = True
+    except requests.RequestException:
+        pass
+
+
+if "_keys_checked" not in st.session_state:
+    _validate_on_load()
+    st.session_state._keys_checked = True
+
 # --- Session State Initialization ---
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
@@ -39,6 +61,8 @@ if "temperature" not in st.session_state:
     st.session_state.temperature = 0.7
 if "max_tokens" not in st.session_state:
     st.session_state.max_tokens = 1000
+if "verified_keys" not in st.session_state:
+    st.session_state.verified_keys = {}
 
 # --- Configuration (Securely from Environment) ---
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
@@ -201,6 +225,11 @@ def format_time_remaining(reset_timestamp: int) -> str:
 with st.sidebar:
     st.markdown("## 🏛️")
     st.caption("Hürriyet Partisi AI Gateway")
+    active = [k for k, v in st.session_state.get("verified_keys", {}).items() if v]
+    if active:
+        st.caption("🔐 Etkin Anahtarlar: " + ", ".join(active))
+    else:
+        st.caption("🔐 Etkin anahtar yok. Ayarlar bölümünden doğrulayın.")
 
 # --- Two-Column Layout: Chat (Left) | Info (Right) ---
 col_left, col_right = st.columns([2, 1], gap="large")
