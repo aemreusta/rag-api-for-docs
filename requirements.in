@@ -3,6 +3,7 @@ uvicorn
 python-dotenv
 langfuse
 llama-index
+llama-index-llms-gemini
 llama-index-llms-openrouter
 llama-index-llms-openai
 groq
