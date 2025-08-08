@@ -105,7 +105,15 @@ class OpenRouterProvider(LLMProvider):
 
     def __init__(self, timeout_seconds: int = 30):
         super().__init__(ProviderType.OPENROUTER, timeout_seconds)
-        self.model_name = settings.LLM_MODEL_NAME
+        # Map common Gemini aliases to OpenRouter canonical IDs
+        model_name = settings.LLM_MODEL_NAME
+        alias_map = {
+            "gemini-2.0-flash": "google/gemini-2.0-flash-001",
+            "gemini-1.5-flash": "google/gemini-1.5-flash",
+            "gemini-1.5-pro": "google/gemini-1.5-pro",
+            "gemini-2.0-flash-thinking": "google/gemini-2.0-flash-thinking-exp",
+        }
+        self.model_name = alias_map.get(model_name, model_name)
 
         if self.is_available():
             self.client = OpenRouter(
@@ -461,7 +469,22 @@ class GroqProvider(LLMProvider):
                 wait_time = await self._handle_error(e, attempt, max_retries)
                 await asyncio.sleep(wait_time)
 
-    async def complete(self, messages: list[ChatMessage], **kwargs) -> CompletionResponse:
+    def _ensure_messages(self, messages: list[ChatMessage] | str) -> list[ChatMessage]:
+        """Normalize input into a list[ChatMessage] for providers.
+
+        LlamaIndex sometimes calls CustomLLM.complete with a formatted string
+        when `formatted=True` is passed, which breaks providers that expect
+        ChatMessage instances. This helper converts a string into a single
+        user ChatMessage.
+        """
+        if isinstance(messages, list):
+            return messages
+        from llama_index.core.base.llms.types import MessageRole
+
+        return [ChatMessage(role=MessageRole.USER, content=str(messages))]
+
+    async def complete(self, messages: list[ChatMessage] | str, **kwargs) -> CompletionResponse:
+        messages = self._ensure_messages(messages)
         try:
             self.logger.info("Calling Groq for completion", model=self.model_name)
 
@@ -524,8 +547,9 @@ class GroqProvider(LLMProvider):
             raise
 
     async def stream_complete(
-        self, messages: list[ChatMessage], **kwargs
+        self, messages: list[ChatMessage] | str, **kwargs
     ) -> AsyncGenerator[CompletionResponse, None]:
+        messages = self._ensure_messages(messages)
         try:
             self.logger.info("Calling Groq for streaming completion", model=self.model_name)
 
@@ -606,7 +630,8 @@ class OpenAIProvider(LLMProvider):
     def is_available(self) -> bool:
         return bool(settings.OPENAI_API_KEY)
 
-    async def complete(self, messages: list[ChatMessage], **kwargs) -> CompletionResponse:
+    async def complete(self, messages: list[ChatMessage] | str, **kwargs) -> CompletionResponse:
+        messages = self._ensure_messages(messages)
         try:
             self.logger.info("Calling OpenAI for completion", model=self.model_name)
             response = await asyncio.wait_for(
@@ -622,8 +647,9 @@ class OpenAIProvider(LLMProvider):
             raise
 
     async def stream_complete(
-        self, messages: list[ChatMessage], **kwargs
+        self, messages: list[ChatMessage] | str, **kwargs
     ) -> AsyncGenerator[CompletionResponse, None]:
+        messages = self._ensure_messages(messages)
         try:
             self.logger.info("Calling OpenAI for streaming completion", model=self.model_name)
             async for chunk in self.client.astream_complete(messages, **kwargs):
@@ -656,7 +682,8 @@ class GoogleAIStudioProvider(LLMProvider):
     def is_available(self) -> bool:
         return bool(settings.GOOGLE_AI_STUDIO_API_KEY)
 
-    async def complete(self, messages: list[ChatMessage], **kwargs) -> CompletionResponse:
+    async def complete(self, messages: list[ChatMessage] | str, **kwargs) -> CompletionResponse:
+        messages = self._ensure_messages(messages)
         try:
             self.logger.info("Calling Google Gemini for completion", model=self.model_name)
             response = await asyncio.wait_for(
@@ -676,8 +703,9 @@ class GoogleAIStudioProvider(LLMProvider):
             raise
 
     async def stream_complete(
-        self, messages: list[ChatMessage], **kwargs
+        self, messages: list[ChatMessage] | str, **kwargs
     ) -> AsyncGenerator[CompletionResponse, None]:
+        messages = self._ensure_messages(messages)
         try:
             self.logger.info(
                 "Calling Google Gemini for streaming completion", model=self.model_name

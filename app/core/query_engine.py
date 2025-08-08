@@ -92,12 +92,11 @@ def get_chat_response(question: str, session_id: str) -> Any:
     # Use async version with caching
     try:
         loop = asyncio.get_event_loop()
-        return loop.run_until_complete(get_chat_response_async(question, session_id))
     except RuntimeError:
-        # Create new event loop if none exists
+        # Create a dedicated loop for this call if none exists
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(get_chat_response_async(question, session_id))
-        finally:
-            loop.close()
+
+    # Important: do NOT close the loop here; other async components may
+    # still rely on it within the same request lifecycle.
+    return loop.run_until_complete(get_chat_response_async(question, session_id))
