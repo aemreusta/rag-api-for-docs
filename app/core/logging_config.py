@@ -68,6 +68,10 @@ class SensitiveDataFilter(logging.Filter):
             re.compile(r"api[_-]?key\s*[:=]\s*([A-Za-z0-9\-._~+/]{6,})", re.IGNORECASE),
             "api_key=[REDACTED]",
         ),
+        (
+            re.compile(r"X-API-Key\s*[:=]\s*([A-Za-z0-9\-.]{6,})", re.IGNORECASE),
+            "X-API-Key=[REDACTED]",
+        ),
         (re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"), "[EMAIL_REDACTED]"),
         (
             re.compile(r'password["\']?\s*[:=]\s*["\']?([^"\'\s]{6,})["\']?', re.IGNORECASE),

@@ -23,7 +23,7 @@ from app.core.config import settings
 from app.core.llm_router import LLMRouter
 from app.core.metrics import vector_metrics
 
-# Set up the embedding model first
+# Set up the embedding model first (384-dim; matches settings.EMBEDDING_DIM)
 embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
 Settings.embed_model = embed_model
 
@@ -35,7 +35,7 @@ vector_store = PGVectorStore.from_params(
     port=5432,
     user=settings.POSTGRES_USER,
     table_name="content_embeddings",
-    embed_dim=settings.EMBEDDING_DIM,  # Use configurable dimension from settings
+    embed_dim=settings.EMBEDDING_DIM,  # Use configurable dimension from settings (default 384)
 )
 index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
 
@@ -92,12 +92,11 @@ def get_chat_response(question: str, session_id: str) -> Any:
     # Use async version with caching
     try:
         loop = asyncio.get_event_loop()
-        return loop.run_until_complete(get_chat_response_async(question, session_id))
     except RuntimeError:
-        # Create new event loop if none exists
+        # Create a dedicated loop for this call if none exists
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(get_chat_response_async(question, session_id))
-        finally:
-            loop.close()
+
+    # Important: do NOT close the loop here; other async components may
+    # still rely on it within the same request lifecycle.
+    return loop.run_until_complete(get_chat_response_async(question, session_id))

@@ -19,7 +19,7 @@ class TestPgVectorPerformance:
 
     @pytest.fixture
     def sample_embeddings(self) -> list[list[float]]:
-        """Generate sample 1536-dimensional embeddings for testing."""
+        """Generate sample embeddings matching settings.EMBEDDING_DIM for testing."""
         np.random.seed(42)  # Deterministic for reproducible tests
         # Generate 100 sample embeddings for performance testing
         embeddings = []
@@ -120,7 +120,7 @@ class TestPgVectorPerformance:
         assert "ef_construction='64'" in index_info.indexdef, "Index should have ef_construction=64"
 
     def test_vector_column_type(self, db_session: Session) -> None:
-        """Verify content_vector column is VECTOR(1536) type."""
+        """Verify content_vector column is vector type (pgvector)."""
         result = db_session.execute(
             text("""
                 SELECT column_name, data_type, character_maximum_length

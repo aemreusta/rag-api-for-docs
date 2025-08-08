@@ -14,7 +14,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""  # Optional
     GOOGLE_AI_STUDIO_API_KEY: str = ""  # Optional
     LOCAL_LLM_PATH: str = ""  # Optional
-    LLM_MODEL_NAME: str = "google/gemini-1.5-pro-latest"
+    # Default chat model selection
+    LLM_MODEL_NAME: str = "gemini-2.0-flash"  # Preferred default via Google AI Studio
+    GOOGLE_MODEL_NAME: str = "gemini-2.0-flash"
 
     # LLM Router Configuration
     LLM_TIMEOUT_SECONDS: int = 30
@@ -44,7 +46,7 @@ class Settings(BaseSettings):
     PDF_DOCUMENTS_DIR: str = "pdf_documents"
 
     # Vector Embeddings Settings
-    EMBEDDING_DIM: int = 1536  # OpenAI text-embedding-3-small dimension
+    EMBEDDING_DIM: int = 384  # Dimension for MiniLM/bge-small style local embeddings
 
     # Metrics & Monitoring Settings
     METRICS_BACKEND: str = "auto"  # auto, prometheus, datadog, opentelemetry, noop

@@ -58,8 +58,8 @@ def main():
         password="postgres",
         port=5432,
         user="postgres",
-        table_name="charity_policies",
-        embed_dim=384,  # Dimension for bge-small-en-v1.5
+        table_name="content_embeddings",
+        embed_dim=settings.EMBEDDING_DIM,  # Dimension must match DB (default 384)
     )
 
     # Build the index

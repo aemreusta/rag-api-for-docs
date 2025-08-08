@@ -24,3 +24,4 @@ ipython
 # Streamlit Demo UI
 streamlit
 streamlit-chat
+llama-index-llms-gemini

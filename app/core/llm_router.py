@@ -24,6 +24,7 @@ from groq.types.chat import ChatCompletionChunk
 from llama_index.core.base.llms.types import ChatMessage, CompletionResponse
 from llama_index.core.llms import LLMMetadata
 from llama_index.core.llms.custom import CustomLLM
+from llama_index.llms.gemini import Gemini
 from llama_index.llms.openai import OpenAI
 from llama_index.llms.openrouter import OpenRouter
 from pydantic import PrivateAttr
@@ -54,6 +55,7 @@ class ProviderType(Enum):
     OPENROUTER = "openrouter"
     GROQ = "groq"
     OPENAI = "openai"
+    GOOGLE = "google"
     LOCAL = "local"
 
 
@@ -74,6 +76,18 @@ class LLMProvider(ABC):
         self.provider_type = provider_type
         self.timeout_seconds = timeout_seconds
         self.logger = get_logger(f"{__name__}.{provider_type.value}")
+
+    def _ensure_messages(self, messages: list[ChatMessage] | str) -> list[ChatMessage]:
+        """Normalize input into a list[ChatMessage].
+
+        Some callers pass a formatted string instead of ChatMessage objects.
+        Convert strings into a single user message to keep providers robust.
+        """
+        if isinstance(messages, list):
+            return messages
+        from llama_index.core.base.llms.types import MessageRole
+
+        return [ChatMessage(role=MessageRole.USER, content=str(messages))]
 
     @abstractmethod
     def is_available(self) -> bool:
@@ -103,7 +117,15 @@ class OpenRouterProvider(LLMProvider):
 
     def __init__(self, timeout_seconds: int = 30):
         super().__init__(ProviderType.OPENROUTER, timeout_seconds)
-        self.model_name = settings.LLM_MODEL_NAME
+        # Map common Gemini aliases to OpenRouter canonical IDs
+        model_name = settings.LLM_MODEL_NAME
+        alias_map = {
+            "gemini-2.0-flash": "google/gemini-2.0-flash-001",
+            "gemini-1.5-flash": "google/gemini-1.5-flash",
+            "gemini-1.5-pro": "google/gemini-1.5-pro",
+            "gemini-2.0-flash-thinking": "google/gemini-2.0-flash-thinking-exp",
+        }
+        self.model_name = alias_map.get(model_name, model_name)
 
         if self.is_available():
             self.client = OpenRouter(
@@ -459,7 +481,22 @@ class GroqProvider(LLMProvider):
                 wait_time = await self._handle_error(e, attempt, max_retries)
                 await asyncio.sleep(wait_time)
 
-    async def complete(self, messages: list[ChatMessage], **kwargs) -> CompletionResponse:
+    def _ensure_messages(self, messages: list[ChatMessage] | str) -> list[ChatMessage]:
+        """Normalize input into a list[ChatMessage] for providers.
+
+        LlamaIndex sometimes calls CustomLLM.complete with a formatted string
+        when `formatted=True` is passed, which breaks providers that expect
+        ChatMessage instances. This helper converts a string into a single
+        user ChatMessage.
+        """
+        if isinstance(messages, list):
+            return messages
+        from llama_index.core.base.llms.types import MessageRole
+
+        return [ChatMessage(role=MessageRole.USER, content=str(messages))]
+
+    async def complete(self, messages: list[ChatMessage] | str, **kwargs) -> CompletionResponse:
+        messages = self._ensure_messages(messages)
         try:
             self.logger.info("Calling Groq for completion", model=self.model_name)
 
@@ -522,8 +559,9 @@ class GroqProvider(LLMProvider):
             raise
 
     async def stream_complete(
-        self, messages: list[ChatMessage], **kwargs
+        self, messages: list[ChatMessage] | str, **kwargs
     ) -> AsyncGenerator[CompletionResponse, None]:
+        messages = self._ensure_messages(messages)
         try:
             self.logger.info("Calling Groq for streaming completion", model=self.model_name)
 
@@ -604,7 +642,8 @@ class OpenAIProvider(LLMProvider):
     def is_available(self) -> bool:
         return bool(settings.OPENAI_API_KEY)
 
-    async def complete(self, messages: list[ChatMessage], **kwargs) -> CompletionResponse:
+    async def complete(self, messages: list[ChatMessage] | str, **kwargs) -> CompletionResponse:
+        messages = self._ensure_messages(messages)
         try:
             self.logger.info("Calling OpenAI for completion", model=self.model_name)
             response = await asyncio.wait_for(
@@ -620,8 +659,9 @@ class OpenAIProvider(LLMProvider):
             raise
 
     async def stream_complete(
-        self, messages: list[ChatMessage], **kwargs
+        self, messages: list[ChatMessage] | str, **kwargs
     ) -> AsyncGenerator[CompletionResponse, None]:
+        messages = self._ensure_messages(messages)
         try:
             self.logger.info("Calling OpenAI for streaming completion", model=self.model_name)
             async for chunk in self.client.astream_complete(messages, **kwargs):
@@ -635,6 +675,68 @@ class OpenAIProvider(LLMProvider):
         except Exception as e:
             self.logger.error(
                 "OpenAI streaming completion failed", error=str(e), error_type=type(e).__name__
+            )
+            raise
+
+    def get_model_name(self) -> str:
+        return self.model_name
+
+
+class GoogleAIStudioProvider(LLMProvider):
+    """Google AI Studio (Gemini) provider using LlamaIndex Gemini LLM."""
+
+    def __init__(self, timeout_seconds: int = 30):
+        super().__init__(ProviderType.GOOGLE, timeout_seconds)
+        self.model_name = settings.GOOGLE_MODEL_NAME
+        if self.is_available():
+            self.client = Gemini(api_key=settings.GOOGLE_AI_STUDIO_API_KEY, model=self.model_name)
+
+    def is_available(self) -> bool:
+        return bool(settings.GOOGLE_AI_STUDIO_API_KEY)
+
+    async def complete(self, messages: list[ChatMessage] | str, **kwargs) -> CompletionResponse:
+        messages = self._ensure_messages(messages)
+        try:
+            self.logger.info("Calling Google Gemini for completion", model=self.model_name)
+            response = await asyncio.wait_for(
+                self.client.acomplete(messages, **kwargs), timeout=self.timeout_seconds
+            )
+            self.logger.info("Google Gemini completion successful")
+            return response
+        except asyncio.TimeoutError as err:
+            self.logger.warning("Google Gemini request timed out", timeout=self.timeout_seconds)
+            raise TimeoutError(
+                f"Google Gemini request timed out after {self.timeout_seconds}s"
+            ) from err
+        except Exception as e:
+            self.logger.error(
+                "Google Gemini completion failed", error=str(e), error_type=type(e).__name__
+            )
+            raise
+
+    async def stream_complete(
+        self, messages: list[ChatMessage] | str, **kwargs
+    ) -> AsyncGenerator[CompletionResponse, None]:
+        messages = self._ensure_messages(messages)
+        try:
+            self.logger.info(
+                "Calling Google Gemini for streaming completion", model=self.model_name
+            )
+            async for chunk in self.client.astream_complete(messages, **kwargs):
+                yield chunk
+            self.logger.info("Google Gemini streaming completion successful")
+        except asyncio.TimeoutError as err:
+            self.logger.warning(
+                "Google Gemini streaming request timed out", timeout=self.timeout_seconds
+            )
+            raise TimeoutError(
+                f"Google Gemini streaming request timed out after {self.timeout_seconds}s"
+            ) from err
+        except Exception as e:
+            self.logger.error(
+                "Google Gemini streaming completion failed",
+                error=str(e),
+                error_type=type(e).__name__,
             )
             raise
 
@@ -703,7 +805,9 @@ class LLMRouter(CustomLLM):
             self._redis_client = None
 
         # Initialize providers in priority order
+        # Prefer Google AI Studio by default; then fall back to others
         self._providers = [
+            GoogleAIStudioProvider(settings.LLM_TIMEOUT_SECONDS),
             OpenRouterProvider(settings.LLM_TIMEOUT_SECONDS),
             GroqProvider(settings.GROQ_TIMEOUT_SECONDS),
             OpenAIProvider(settings.LLM_TIMEOUT_SECONDS),

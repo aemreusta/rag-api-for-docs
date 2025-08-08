@@ -16,8 +16,8 @@ RUN pip install --upgrade pip uv
 # Copy *both* lock-files before install to keep the cache
 COPY requirements-dev.txt ./
 
-# Use uv to install dependencies from the requirements-dev.txt file
-RUN uv pip sync requirements-dev.txt
+# Use uv to install dependencies from the requirements-dev.txt file into system interpreter
+RUN uv pip sync --system requirements-dev.txt
 
 # Create necessary directories
 RUN mkdir -p pdf_documents

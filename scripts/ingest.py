@@ -93,7 +93,7 @@ def main():
         port=5432,
         user="postgres",
         table_name="content_embeddings",
-        embed_dim=384,  # Dimension for bge-small-en-v1.5
+        embed_dim=settings.EMBEDDING_DIM,  # Must match DB (default 384)
     )
 
     # Build the index

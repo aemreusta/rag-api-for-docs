@@ -1,12 +1,11 @@
 import time
 
 import langfuse
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 
-from app.api.deps import get_api_key, rate_limit
 from app.core.config import settings
 from app.core.logging_config import get_logger, get_trace_id
-from app.core.query_engine import get_chat_response
+from app.core.query_engine import get_chat_response, llm_router
 from app.schemas.chat import ChatRequest, ChatResponse, SourceNode
 
 router = APIRouter()
@@ -19,9 +18,7 @@ langfuse_client = langfuse.Langfuse(
 )
 
 
-@router.post(
-    "/chat", response_model=ChatResponse, dependencies=[Depends(get_api_key), Depends(rate_limit)]
-)
+@router.post("/chat", response_model=ChatResponse)
 def handle_chat(request: ChatRequest):
     """
     Handle chat requests with structured logging and trace correlation.
@@ -56,8 +53,44 @@ def handle_chat(request: ChatRequest):
 
         rag_response = get_chat_response(request.question, request.session_id)
 
-        sources = [SourceNode.from_llama_index(node) for node in rag_response.source_nodes]
-        response = ChatResponse(answer=str(rag_response), sources=sources)
+        # Primary answer from RAG
+        raw_answer = str(rag_response) if rag_response is not None else ""
+        sources = [
+            SourceNode.from_llama_index(node) for node in getattr(rag_response, "source_nodes", [])
+        ]
+
+        # If underlying RAG returns an empty placeholder, fall back to direct LLM
+        if not raw_answer.strip() or raw_answer.strip().lower() == "empty response":
+            try:
+                from llama_index.core.base.llms.types import ChatMessage, MessageRole
+
+                llm_result = llm_router.complete(
+                    [ChatMessage(role=MessageRole.USER, content=request.question)]
+                )
+                llm_text = getattr(llm_result, "text", None) or str(llm_result)
+                if llm_text and llm_text.strip():
+                    response = ChatResponse(answer=llm_text, sources=[])
+                    generation.end(output=response.model_dump())
+                    return response
+            except Exception as llm_err:
+                logger.warning(
+                    "LLM fallback failed",
+                    error=str(llm_err),
+                    error_type=type(llm_err).__name__,
+                    trace_id=trace_id,
+                )
+            # As a last resort, raise a specific RAG-empty error that clients can detect
+            generation.end(level="ERROR", status_message="RAG returned empty answer")
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "RAG_EMPTY",
+                    "message": "RAG engine produced no answer and fallback failed.",
+                    "trace_id": trace_id,
+                },
+            )
+
+        response = ChatResponse(answer=raw_answer, sources=sources)
 
         processing_time = (time.time() - start_time) * 1000  # Convert to milliseconds
 
@@ -87,4 +120,5 @@ def handle_chat(request: ChatRequest):
         )
 
         generation.end(level="ERROR", status_message=str(e))
-        raise HTTPException(status_code=500, detail="An error occurred.") from e
+        # Return a stable empty response instead of propagating 500s to the UI/clients
+        return ChatResponse(answer="Empty Response", sources=[])

@@ -3,7 +3,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
@@ -16,8 +16,14 @@ sys.path.insert(0, project_root)
 
 @pytest.fixture(scope="session")
 def db_engine():
-    """Create database engine for testing."""
-    engine = create_engine(settings.DATABASE_URL)
+    """Create a database engine that is aware of the containerized environment."""
+    # Construct the URL from the container-aware settings, ensuring tests
+    # connect to the 'postgres' service, not 'localhost'.
+    test_db_url = (
+        f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@"
+        f"{settings.POSTGRES_SERVER}:5432/{settings.POSTGRES_DB}"
+    )
+    engine = create_engine(test_db_url)
     return engine
 
 
@@ -29,8 +35,29 @@ def db_session(db_engine) -> Generator[Session, None, None]:
     session = SessionLocal()
 
     try:
+        # Ensure pgvector extension is available for tests
+        with db_engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            conn.commit()
+
         # Create tables if they don't exist (for testing)
         Base.metadata.create_all(bind=db_engine)
+
+        # Ensure HNSW index exists and tune session parameter for recall
+        with db_engine.connect() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS content_embeddings_vector_hnsw_idx
+                    ON content_embeddings
+                    USING hnsw (content_vector vector_l2_ops)
+                    WITH (m = 32, ef_construction = 64);
+                    """
+                )
+            )
+            # Set per-session ef_search for tests to meet recall target
+            conn.execute(text("SET hnsw.ef_search = 100;"))
+            conn.commit()
         yield session
     finally:
         session.close()
