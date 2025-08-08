@@ -42,6 +42,22 @@ def db_session(db_engine) -> Generator[Session, None, None]:
 
         # Create tables if they don't exist (for testing)
         Base.metadata.create_all(bind=db_engine)
+
+        # Ensure HNSW index exists and tune session parameter for recall
+        with db_engine.connect() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS content_embeddings_vector_hnsw_idx
+                    ON content_embeddings
+                    USING hnsw (content_vector vector_l2_ops)
+                    WITH (m = 32, ef_construction = 64);
+                    """
+                )
+            )
+            # Set per-session ef_search for tests to meet recall target
+            conn.execute(text("SET hnsw.ef_search = 100;"))
+            conn.commit()
         yield session
     finally:
         session.close()
