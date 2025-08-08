@@ -303,11 +303,17 @@ with chat_tab:
                 with st.spinner("🤔 Düşünüyor..."):
                     response = get_chatbot_response(prompt, st.session_state.selected_model_id)
 
-                if response:
+                if response is not None:
                     try:
                         data = response.json()
-                        answer = data.get("answer", "Yanıt bulunamadı.")
+                        answer = data.get("answer")
                         sources = data.get("sources", [])
+
+                        if not answer:
+                            answer = (
+                                "Şu anda yanıt veremiyorum, ancak sorunu anladım. "
+                                "Lütfen daha kısa veya farklı bir şekilde tekrar deneyin."
+                            )
 
                         st.markdown(answer)
                         format_sources(sources)
@@ -322,7 +328,19 @@ with chat_tab:
                         update_rate_limit_status()
 
                     except requests.exceptions.JSONDecodeError:
-                        st.error("🔧 Sunucu yanıtı işlenemedi. Lütfen tekrar deneyin.")
+                        fallback = (
+                            "Beklenmeyen bir biçimde yanıt aldım. "
+                            "Lütfen tekrar deneyin veya farklı bir soru sorun."
+                        )
+                        st.markdown(fallback)
+                        st.session_state.messages.append({"role": "assistant", "content": fallback})
+                else:
+                    fallback = (
+                        "Geçici bir bağlantı sorunu yaşanıyor. "
+                        "Lütfen bağlantınızı kontrol edin ve tekrar deneyin."
+                    )
+                    st.markdown(fallback)
+                    st.session_state.messages.append({"role": "assistant", "content": fallback})
 
 # --- Footer ---
 st.divider()

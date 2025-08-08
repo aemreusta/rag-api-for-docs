@@ -95,9 +95,9 @@ def test_chat_endpoint_handles_errors(mock_langfuse, mock_get_chat_response):
         headers={"X-API-Key": settings.API_KEY},
     )
 
-    # Verify error response
+    # Verify error response (friendly generic message)
     assert response.status_code == 500
-    assert "An error occurred" in response.json()["detail"]
+    assert "Üzgünüm" in response.json()["detail"]
 
     # Verify Langfuse error was logged
     mock_generation.end.assert_called_with(level="ERROR", status_message="Test error")

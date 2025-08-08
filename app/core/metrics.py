@@ -75,7 +75,7 @@ class PrometheusBackend(MetricsBackend):
             lambda: Histogram(
                 "vector_search_duration_seconds",
                 "Time spent on vector similarity search operations",
-                labelnames=["status", "model"],
+                labelnames=["status"],
                 buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
             ),
             "vector_search_duration_seconds",
@@ -86,7 +86,7 @@ class PrometheusBackend(MetricsBackend):
             lambda: Counter(
                 "vector_search_requests_total",
                 "Total number of vector search requests",
-                labelnames=["status", "model"],
+                labelnames=["status"],
             ),
             "vector_search_requests_total",
             registry,

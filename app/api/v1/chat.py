@@ -87,4 +87,10 @@ def handle_chat(request: ChatRequest):
         )
 
         generation.end(level="ERROR", status_message=str(e))
-        raise HTTPException(status_code=500, detail="An error occurred.") from e
+        # Return a generic, user-friendly error message without leaking internals
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Üzgünüm, şu anda yanıt veremiyorum. Lütfen kısa bir süre sonra tekrar deneyin."
+            ),
+        ) from e

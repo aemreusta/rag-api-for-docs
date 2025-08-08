@@ -46,6 +46,16 @@ class TestPgVectorPrometheus:
         for status in status_values:
             assert status in ["success", "error"], f"Status {status} should be valid"
 
+    def test_histogram_and_counter_do_not_require_model_label(self):
+        """Ensure metrics do not depend on a 'model' label that isn't provided."""
+        from app.core.metrics import PrometheusBackend
+
+        backend = PrometheusBackend()
+
+        # These should not raise even if no 'model' label is provided
+        backend.record_histogram("vector_search_duration_seconds", 0.01, {"status": "success"})
+        backend.increment_counter("vector_search_requests_total", {"status": "error"})
+
     def test_embedding_dimension_configuration(self):
         """Test that EMBEDDING_DIM is properly configured."""
         from app.core.config import settings
