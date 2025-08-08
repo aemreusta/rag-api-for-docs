@@ -27,7 +27,11 @@ def test_chat_endpoint_with_invalid_api_key():
     """Auth disabled: invalid key should be ignored."""
     response = client.post(
         "/api/v1/chat",
-        json={"question": "What is the volunteer policy?", "session_id": "test-session"},
+        json={
+            "question": "What is the volunteer policy?",
+            "session_id": "test-session",
+            "stream": False,
+        },
         headers={"X-API-Key": "invalid-key"},
     )
     assert response.status_code in (200, 500)

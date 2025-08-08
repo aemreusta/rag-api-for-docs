@@ -2,6 +2,7 @@ import time
 
 import langfuse
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.api.deps import rate_limit
 from app.core.config import settings
@@ -110,6 +111,18 @@ async def handle_chat(request: ChatRequest, _rl: None = Depends(rate_limit)):
         )
 
         generation.end(output=response.model_dump())
+
+        # If streaming requested and answer is long, stream in chunks
+        if request.stream and len(response.answer) > 300:
+
+            async def streamer():
+                chunk_size = 256
+                text = response.answer
+                for i in range(0, len(text), chunk_size):
+                    yield text[i : i + chunk_size]
+
+            return StreamingResponse(streamer(), media_type="text/plain; charset=utf-8")
+
         return response
 
     except Exception as e:
