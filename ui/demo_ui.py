@@ -296,6 +296,30 @@ with col_right:
 
     elif info_page == "Ayarlar":
         st.subheader("Ayarlar")
+        with st.expander("🔑 API Anahtarlarını Doğrula", expanded=False):
+            provider = st.selectbox("Sağlayıcı", ["openrouter", "groq", "google"], index=0)
+            user_api_key = st.text_input(
+                "API Key", type="password", help="Sağlayıcı anahtarınızı girin"
+            )
+            if st.button("Doğrula") and user_api_key:
+                try:
+                    headers = {"X-API-Key": API_KEY}
+                    params = {"provider": provider, "api_key": user_api_key}
+                    r = requests.get(
+                        f"{API_BASE_URL}/api/v1/providers/validate",
+                        headers=headers,
+                        params=params,
+                        timeout=15,
+                    )
+                    r.raise_for_status()
+                    data = r.json()
+                    if data.get("valid"):
+                        st.success("API anahtarı geçerli.")
+                        st.session_state.setdefault("verified_keys", {})[provider] = user_api_key
+                    else:
+                        st.error(f"API anahtarı geçersiz: {data.get('detail')}")
+                except requests.RequestException as e:
+                    st.error(f"Doğrulama başarısız: {e}")
         # Server-validated model fetch
         if st.button("🔍 Mevcut Modelleri Getir (OpenRouter)"):
             try:
