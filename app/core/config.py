@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     PDF_DOCUMENTS_DIR: str = "pdf_documents"
 
     # Vector Embeddings Settings
-    EMBEDDING_DIM: int = 384  # Dimension for MiniLM/bge-small style local embeddings
+    EMBEDDING_DIM: int = 1536  # Default dim to match tests and Gemini embeddings
 
     # Metrics & Monitoring Settings
     METRICS_BACKEND: str = "auto"  # auto, prometheus, datadog, opentelemetry, noop

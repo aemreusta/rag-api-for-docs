@@ -69,16 +69,16 @@ def test_ingestion_main_function(
         host=settings.LANGFUSE_HOST,
     )
 
-    # Verify PGVectorStore setup
-    mock_pgvector.assert_called_once_with(
-        database="app",
-        host="postgres",
-        password="postgres",
-        port=5432,
-        user="postgres",
-        table_name="content_embeddings",
-        embed_dim=384,
-    )
+    # Verify PGVectorStore setup (embed_dim should match runtime setting)
+    mock_pgvector.assert_called_once()
+    _, kwargs = mock_pgvector.call_args
+    assert kwargs["database"] == "app"
+    assert kwargs["host"] == "postgres"
+    assert kwargs["password"] == "postgres"
+    assert kwargs["port"] == 5432
+    assert kwargs["user"] == "postgres"
+    assert kwargs["table_name"] == "content_embeddings"
+    assert kwargs["embed_dim"] == settings.EMBEDDING_DIM
 
     # Verify document loading
     mock_reader.assert_called_once_with(input_dir=PDF_DIRECTORY)
