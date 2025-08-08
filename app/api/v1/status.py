@@ -6,10 +6,9 @@ Provides information about current rate limiting status for authenticated client
 
 import time
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
-from app.api.deps import get_api_key
 from app.core.config import settings
 from app.core.redis import redis_client
 
@@ -24,9 +23,7 @@ class RateLimitStatus(BaseModel):
     reset: int  # Unix timestamp when the limit resets
 
 
-@router.get(
-    "/rate-limit/status", response_model=RateLimitStatus, dependencies=[Depends(get_api_key)]
-)
+@router.get("/rate-limit/status", response_model=RateLimitStatus)
 async def get_rate_limit_status(request: Request, response: Response):
     """
     Returns the current rate limit status for the client's IP.

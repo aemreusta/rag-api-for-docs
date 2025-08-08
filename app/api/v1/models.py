@@ -1,13 +1,12 @@
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 
-from app.api.deps import get_api_key
 from app.core.config import settings
 
 router = APIRouter()
 
 
-@router.get("/providers/validate", dependencies=[Depends(get_api_key)])
+@router.get("/providers/validate")
 async def validate_provider_key(
     provider: str = Query(..., pattern="^(openrouter|groq|google)$"),
     api_key: str | None = Query(
@@ -78,7 +77,7 @@ async def validate_provider_key(
     }
 
 
-@router.get("/models", dependencies=[Depends(get_api_key)])
+@router.get("/models")
 async def list_models(
     provider: str = Query("openrouter"),
     only_gemini: bool = Query(True),

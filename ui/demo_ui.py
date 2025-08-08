@@ -68,21 +68,7 @@ if "verified_keys" not in st.session_state:
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 API_KEY = os.getenv("API_KEY")
 
-# Validate configuration
-if not API_KEY:
-    st.error("🚨 **FATAL:** API_KEY environment variable not set. The application cannot start.")
-    st.info("""
-    **Configuration Issue:** The API key is missing from the environment.
-
-    **For Development:**
-    1. Ensure your `.env` file contains `API_KEY=your_actual_key`
-    2. Restart the containers: `make down && make up`
-
-    **For Production:**
-    1. Set the `API_KEY` environment variable in your deployment
-    2. Restart the service
-    """)
-    st.stop()
+# Optional API_KEY for future auth; no longer required for now
 
 # API endpoints
 CHAT_ENDPOINT = f"{API_BASE_URL}/api/v1/chat"

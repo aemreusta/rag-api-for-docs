@@ -1,9 +1,8 @@
 import time
 
 import langfuse
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 
-from app.api.deps import get_api_key, rate_limit
 from app.core.config import settings
 from app.core.logging_config import get_logger, get_trace_id
 from app.core.query_engine import get_chat_response
@@ -19,9 +18,7 @@ langfuse_client = langfuse.Langfuse(
 )
 
 
-@router.post(
-    "/chat", response_model=ChatResponse, dependencies=[Depends(get_api_key), Depends(rate_limit)]
-)
+@router.post("/chat", response_model=ChatResponse)
 def handle_chat(request: ChatRequest):
     """
     Handle chat requests with structured logging and trace correlation.
