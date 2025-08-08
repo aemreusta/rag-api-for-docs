@@ -1,11 +1,11 @@
 import time
 
 import langfuse
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from app.core.config import settings
 from app.core.logging_config import get_logger, get_trace_id
-from app.core.query_engine import get_chat_response
+from app.core.query_engine import get_chat_response, llm_router
 from app.schemas.chat import ChatRequest, ChatResponse, SourceNode
 
 router = APIRouter()
@@ -53,8 +53,37 @@ def handle_chat(request: ChatRequest):
 
         rag_response = get_chat_response(request.question, request.session_id)
 
-        sources = [SourceNode.from_llama_index(node) for node in rag_response.source_nodes]
-        response = ChatResponse(answer=str(rag_response), sources=sources)
+        # Primary answer from RAG
+        raw_answer = str(rag_response) if rag_response is not None else ""
+        sources = [
+            SourceNode.from_llama_index(node) for node in getattr(rag_response, "source_nodes", [])
+        ]
+
+        # If underlying RAG returns an empty placeholder, fall back to direct LLM
+        if not raw_answer.strip() or raw_answer.strip().lower() == "empty response":
+            try:
+                from llama_index.core.base.llms.types import ChatMessage, MessageRole
+
+                llm_result = llm_router.complete(
+                    [ChatMessage(role=MessageRole.USER, content=request.question)]
+                )
+                llm_text = getattr(llm_result, "text", None) or str(llm_result)
+                if llm_text and llm_text.strip():
+                    response = ChatResponse(answer=llm_text, sources=[])
+                    generation.end(output=response.model_dump())
+                    return response
+            except Exception as llm_err:
+                logger.warning(
+                    "LLM fallback failed",
+                    error=str(llm_err),
+                    error_type=type(llm_err).__name__,
+                    trace_id=trace_id,
+                )
+            # As a last resort, return a stable empty response
+            generation.end(output={"answer": "Empty Response", "sources": []})
+            return ChatResponse(answer="Empty Response", sources=[])
+
+        response = ChatResponse(answer=raw_answer, sources=sources)
 
         processing_time = (time.time() - start_time) * 1000  # Convert to milliseconds
 
@@ -84,10 +113,5 @@ def handle_chat(request: ChatRequest):
         )
 
         generation.end(level="ERROR", status_message=str(e))
-        # Return a generic, user-friendly error message without leaking internals
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Üzgünüm, şu anda yanıt veremiyorum. Lütfen kısa bir süre sonra tekrar deneyin."
-            ),
-        ) from e
+        # Return a stable empty response instead of propagating 500s to the UI/clients
+        return ChatResponse(answer="Empty Response", sources=[])

@@ -77,6 +77,18 @@ class LLMProvider(ABC):
         self.timeout_seconds = timeout_seconds
         self.logger = get_logger(f"{__name__}.{provider_type.value}")
 
+    def _ensure_messages(self, messages: list[ChatMessage] | str) -> list[ChatMessage]:
+        """Normalize input into a list[ChatMessage].
+
+        Some callers pass a formatted string instead of ChatMessage objects.
+        Convert strings into a single user message to keep providers robust.
+        """
+        if isinstance(messages, list):
+            return messages
+        from llama_index.core.base.llms.types import MessageRole
+
+        return [ChatMessage(role=MessageRole.USER, content=str(messages))]
+
     @abstractmethod
     def is_available(self) -> bool:
         """Check if the provider is available (has required credentials)."""
