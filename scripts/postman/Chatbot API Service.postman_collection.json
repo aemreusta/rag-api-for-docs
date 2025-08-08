@@ -1,0 +1,167 @@
+{
+  "info": {
+    "name": "Chatbot API Service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "d3f5e06d-5f6d-4a0a-9a3c-1b2c3d4e5f6a"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Rate Limit Status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/rate-limit/status",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "rate-limit",
+            "status"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Providers",
+      "item": [
+        {
+          "name": "Validate Provider Key (Server Config)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/providers/validate?provider={{provider}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "providers",
+                "validate"
+              ],
+              "query": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Validate Provider Key (Override)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/providers/validate?provider={{provider}}&api_key={{override_api_key}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "providers",
+                "validate"
+              ],
+              "query": [
+                { "key": "provider", "value": "{{provider}}" },
+                { "key": "api_key", "value": "{{override_api_key}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Models",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/models?provider={{provider}}&only_gemini=true",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "models"
+              ],
+              "query": [
+                { "key": "provider", "value": "{{provider}}" },
+                { "key": "only_gemini", "value": "true" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-API-Key",
+            "value": "{{api_key}}",
+            "disabled": true
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"{{question}}\",\n  \"session_id\": \"{{session_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/chat",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "chat"
+          ]
+        }
+      }
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// If session_id is empty, initialize it to a UUID",
+          "if (!pm.environment.get('session_id')) { pm.environment.set('session_id', pm.variables.replaceIn('{{$randomUUID}}')); }",
+          "// Default question if not set",
+          "if (!pm.environment.get('question')) { pm.environment.set('question', 'Selam! Parti politikaları hakkında bana bir şey sor.'); }"
+        ]
+      }
+    }
+  ]
+}
+
+
