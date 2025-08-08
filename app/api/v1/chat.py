@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.core.config import settings
 from app.core.logging_config import get_logger, get_trace_id
-from app.core.query_engine import get_chat_response, llm_router
+from app.core.query_engine import get_chat_response, get_chat_response_async, llm_router
 from app.schemas.chat import ChatRequest, ChatResponse, SourceNode
 
 router = APIRouter()
@@ -19,7 +19,7 @@ langfuse_client = langfuse.Langfuse(
 
 
 @router.post("/chat", response_model=ChatResponse)
-def handle_chat(request: ChatRequest):
+async def handle_chat(request: ChatRequest):
     """
     Handle chat requests with structured logging and trace correlation.
     """
@@ -51,7 +51,12 @@ def handle_chat(request: ChatRequest):
             trace_id=trace_id,
         )
 
-        rag_response = get_chat_response(request.question, request.session_id)
+        # Prefer async path to avoid event loop mixing
+        try:
+            rag_response = await get_chat_response_async(request.question, request.session_id)
+        except Exception:
+            # Fallback to sync path (uses cached wrapper) if needed
+            rag_response = get_chat_response(request.question, request.session_id)
 
         # Primary answer from RAG
         raw_answer = str(rag_response) if rag_response is not None else ""
