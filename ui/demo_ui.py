@@ -33,6 +33,8 @@ API_KEY = os.getenv("API_KEY")  # optional, currently unused
 # Validate configured provider keys on first load
 def _validate_on_load() -> None:
     try:
+        # Ensure container exists before writing into it
+        st.session_state.setdefault("verified_keys", {})
         for prov in ["openrouter", "groq", "google"]:
             r = requests.get(
                 f"{API_BASE_URL}/api/v1/providers/validate",
