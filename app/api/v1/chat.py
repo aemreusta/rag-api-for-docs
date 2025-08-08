@@ -1,7 +1,7 @@
 import time
 
 import langfuse
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from app.core.config import settings
 from app.core.logging_config import get_logger, get_trace_id
@@ -79,9 +79,16 @@ def handle_chat(request: ChatRequest):
                     error_type=type(llm_err).__name__,
                     trace_id=trace_id,
                 )
-            # As a last resort, return a stable empty response
-            generation.end(output={"answer": "Empty Response", "sources": []})
-            return ChatResponse(answer="Empty Response", sources=[])
+            # As a last resort, raise a specific RAG-empty error that clients can detect
+            generation.end(level="ERROR", status_message="RAG returned empty answer")
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "RAG_EMPTY",
+                    "message": "RAG engine produced no answer and fallback failed.",
+                    "trace_id": trace_id,
+                },
+            )
 
         response = ChatResponse(answer=raw_answer, sources=sources)
 
