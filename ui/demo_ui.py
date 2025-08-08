@@ -200,82 +200,10 @@ with st.sidebar:
     st.markdown("## 🏛️")
     st.caption("Hürriyet Partisi AI Gateway")
 
-# --- Main Page Tabs ---
-chat_tab, settings_tab, status_tab = st.tabs(["💬 Sohbet", "⚙️ Ayarlar", "📊 Durum"])
+# --- Two-Column Layout: Chat (Left) | Info (Right) ---
+col_left, col_right = st.columns([2, 1], gap="large")
 
-with settings_tab:
-    st.subheader("Ayarlar")
-    selected_model_name = st.selectbox(
-        "🤖 Model Seçimi",
-        options=list(MODEL_OPTIONS.keys()),
-        index=list(MODEL_OPTIONS.keys()).index(st.session_state.selected_model_name),
-        help="Kullanılacak AI modelini seçin",
-    )
-    st.session_state.selected_model_name = selected_model_name
-    st.session_state.selected_model_id = MODEL_OPTIONS[selected_model_name]
-
-    st.subheader("🎛️ Model Parametreleri")
-    st.session_state.temperature = st.slider(
-        "Yaratıcılık (Temperature)",
-        0.0,
-        2.0,
-        st.session_state.temperature,
-        0.1,
-        help="Yüksek değerler daha yaratıcı, düşük değerler daha tutarlı yanıtlar üretir",
-    )
-    st.session_state.max_tokens = st.slider(
-        "Maksimum Kelime",
-        100,
-        4000,
-        st.session_state.max_tokens,
-        100,
-        help="Yanıtın maksimum uzunluğu",
-    )
-
-    st.info(
-        "💡 Model parametreleri şu anda yalnızca gösterge amaçlıdır. "
-        "Gelecekteki sürümlerde aktif olacaktır."
-    )
-
-with status_tab:
-    st.subheader("📱 Oturum Bilgileri")
-    st.caption(f"**Oturum ID:** `{st.session_state.session_id[:8]}...`")
-    if st.button("🔄 Oturumu Sıfırla", help="Yeni bir oturum başlatır ve geçmişi temizler"):
-        st.session_state.session_id = str(uuid.uuid4())
-        st.session_state.messages = []
-        st.session_state.rate_limit_info = {"limit": 0, "remaining": 0, "reset": 0}
-        st.success("✅ Oturum sıfırlandı!")
-        st.rerun()
-
-    st.divider()
-    st.subheader("🚦 Hız Sınırı Durumu")
-    rate_limit_container = st.container()
-
-    if st.session_state.rate_limit_info["limit"] == 0:
-        update_rate_limit_status()
-    if st.button("🔄 Durumu Yenile", help="Hız sınırı durumunu günceller"):
-        update_rate_limit_status()
-
-    info = st.session_state.rate_limit_info
-    if info["limit"] > 0:
-        remaining_pct = (info["remaining"] / info["limit"]) * 100
-        time_remaining = format_time_remaining(info["reset"])
-
-        rate_limit_container.progress(remaining_pct / 100)
-        rate_limit_container.info(
-            f"**Kalan İstek:** {info['remaining']}/{info['limit']}  \n"
-            f"**Sıfırlanma:** {time_remaining}"
-        )
-
-        if info["remaining"] <= 5 and info["remaining"] > 0:
-            st.warning(f"⚠️ Sadece {info['remaining']} isteğiniz kaldı!")
-        elif info["remaining"] == 0:
-            st.error("🚫 Hız sınırı aşıldı. Lütfen bekleyin.")
-    else:
-        rate_limit_container.info("🔍 Hız sınırı durumu yükleniyor...")
-
-# --- Main Chat Interface ---
-with chat_tab:
+with col_left:
     st.subheader("💬 Sohbet")
 
     # Display chat history
@@ -342,6 +270,99 @@ with chat_tab:
                     st.markdown(fallback)
                     st.session_state.messages.append({"role": "assistant", "content": fallback})
 
+with col_right:
+    # Page-like selector; default shows 'Yapılandırma Bilgileri'
+    info_page = st.radio(
+        "Bilgi Panelleri",
+        ["⚙️ Yapılandırma Bilgileri", "Ayarlar", "Durum"],
+        index=0,
+    )
+
+    if info_page == "⚙️ Yapılandırma Bilgileri":
+        st.subheader("⚙️ Yapılandırma Bilgileri")
+        st.json(
+            {
+                "session_id": st.session_state.session_id,
+                "message_count": len(st.session_state.messages),
+                "rate_limit_info": st.session_state.rate_limit_info,
+                "selected_model": st.session_state.selected_model_id,
+                "api_base_url": API_BASE_URL,
+                "config_source": "Environment Variables (.env)",
+                "api_key_configured": bool(API_KEY),
+            }
+        )
+
+    elif info_page == "Ayarlar":
+        st.subheader("Ayarlar")
+        selected_model_name = st.selectbox(
+            "🤖 Model Seçimi",
+            options=list(MODEL_OPTIONS.keys()),
+            index=list(MODEL_OPTIONS.keys()).index(st.session_state.selected_model_name),
+            help="Kullanılacak AI modelini seçin",
+        )
+        st.session_state.selected_model_name = selected_model_name
+        st.session_state.selected_model_id = MODEL_OPTIONS[selected_model_name]
+
+        st.subheader("🎛️ Model Parametreleri")
+        st.session_state.temperature = st.slider(
+            "Yaratıcılık (Temperature)",
+            0.0,
+            2.0,
+            st.session_state.temperature,
+            0.1,
+            help="Yüksek değerler daha yaratıcı, düşük değerler daha tutarlı yanıtlar üretir",
+        )
+        st.session_state.max_tokens = st.slider(
+            "Maksimum Kelime",
+            100,
+            4000,
+            st.session_state.max_tokens,
+            100,
+            help="Yanıtın maksimum uzunluğu",
+        )
+
+        st.info(
+            "💡 Model parametreleri şu anda yalnızca gösterge amaçlıdır. "
+            "Gelecekteki sürümlerde aktif olacaktır."
+        )
+
+    elif info_page == "Durum":
+        st.subheader("📱 Oturum Bilgileri")
+        st.caption(f"**Oturum ID:** `{st.session_state.session_id[:8]}...`")
+        if st.button("🔄 Oturumu Sıfırla", help="Yeni bir oturum başlatır ve geçmişi temizler"):
+            st.session_state.session_id = str(uuid.uuid4())
+            st.session_state.messages = []
+            st.session_state.rate_limit_info = {"limit": 0, "remaining": 0, "reset": 0}
+            st.success("✅ Oturum sıfırlandı!")
+            st.rerun()
+
+        st.divider()
+        st.subheader("🚦 Hız Sınırı Durumu")
+        rate_limit_container = st.container()
+
+        if st.session_state.rate_limit_info["limit"] == 0:
+            update_rate_limit_status()
+        if st.button("🔄 Durumu Yenile", help="Hız sınırı durumunu günceller"):
+            update_rate_limit_status()
+
+        info = st.session_state.rate_limit_info
+        if info["limit"] > 0:
+            remaining_pct = (info["remaining"] / info["limit"]) * 100
+            time_remaining = format_time_remaining(info["reset"])
+
+            rate_limit_container.progress(remaining_pct / 100)
+            rate_limit_container.info(
+                f"**Kalan İstek:** {info['remaining']}/{info['limit']}  \n"
+                f"**Sıfırlanma:** {time_remaining}"
+            )
+
+            if info["remaining"] <= 5 and info["remaining"] > 0:
+                st.warning(f"⚠️ Sadece {info['remaining']} isteğiniz kaldı!")
+            elif info["remaining"] == 0:
+                st.error("🚫 Hız sınırı aşıldı. Lütfen bekleyin.")
+        else:
+            rate_limit_container.info("🔍 Hız sınırı durumu yükleniyor...")
+
 # --- Footer ---
 st.divider()
 col1, col2, col3 = st.columns(3)
@@ -352,17 +373,3 @@ with col2:
     st.caption(f"🤖 **Aktif Model:** {st.session_state.selected_model_name}")
 with col3:
     st.caption(f"🔗 **API:** {API_BASE_URL}")
-
-# Configuration info (for transparency)
-with st.expander("⚙️ Yapılandırma Bilgileri", expanded=False):
-    st.json(
-        {
-            "session_id": st.session_state.session_id,
-            "message_count": len(st.session_state.messages),
-            "rate_limit_info": st.session_state.rate_limit_info,
-            "selected_model": st.session_state.selected_model_id,
-            "api_base_url": API_BASE_URL,
-            "config_source": "Environment Variables (.env)",
-            "api_key_configured": bool(API_KEY),
-        }
-    )
