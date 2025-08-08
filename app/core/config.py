@@ -14,7 +14,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""  # Optional
     GOOGLE_AI_STUDIO_API_KEY: str = ""  # Optional
     LOCAL_LLM_PATH: str = ""  # Optional
-    LLM_MODEL_NAME: str = "google/gemini-1.5-pro-latest"
+    # Default chat model selection
+    LLM_MODEL_NAME: str = "gemini-2.0-flash"  # Preferred default via Google AI Studio
+    GOOGLE_MODEL_NAME: str = "gemini-2.0-flash"
 
     # LLM Router Configuration
     LLM_TIMEOUT_SECONDS: int = 30

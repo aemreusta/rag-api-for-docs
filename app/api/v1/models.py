@@ -79,7 +79,7 @@ async def validate_provider_key(
 
 @router.get("/models")
 async def list_models(
-    provider: str = Query("openrouter"),
+    provider: str = Query("google"),
     only_gemini: bool = Query(True),
     api_key: str | None = Query(None, description="Optional provider API key override"),
 ):
@@ -87,29 +87,40 @@ async def list_models(
 
     Currently supports provider=openrouter. When only_gemini=True, filters to Google Gemini models.
     """
-    if provider != "openrouter":
-        raise HTTPException(
-            status_code=400, detail="Only 'openrouter' provider is supported currently"
-        )
+    if provider not in ("google", "openrouter"):
+        raise HTTPException(status_code=400, detail="Supported providers: google, openrouter")
 
-    effective_key = api_key or settings.OPENROUTER_API_KEY
-    if not effective_key:
-        raise HTTPException(
-            status_code=503, detail="OpenRouter API key is not configured on the server"
-        )
+    if provider == "google":
+        effective_key = api_key or settings.GOOGLE_AI_STUDIO_API_KEY
+        if not effective_key:
+            raise HTTPException(
+                status_code=503, detail="Google AI Studio API key is not configured on the server"
+            )
+        # Use Google AI Studio listing endpoint if available; otherwise return a curated list
+        # There is no public list endpoint; provide common Gemini models
+        models = [
+            {"id": settings.GOOGLE_MODEL_NAME, "name": settings.GOOGLE_MODEL_NAME},
+            {"id": "gemini-1.5-pro", "name": "gemini-1.5-pro"},
+            {"id": "gemini-1.5-flash", "name": "gemini-1.5-flash"},
+            {"id": "gemini-2.0-flash-thinking", "name": "gemini-2.0-flash-thinking"},
+        ]
+    else:
+        effective_key = api_key or settings.OPENROUTER_API_KEY
+        if not effective_key:
+            raise HTTPException(
+                status_code=503, detail="OpenRouter API key is not configured on the server"
+            )
+        url = "https://openrouter.ai/api/v1/models"
+        headers = {"Authorization": f"Bearer {effective_key}"}
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(url, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=502, detail=f"Failed to fetch models: {e}") from e
 
-    url = "https://openrouter.ai/api/v1/models"
-    headers = {"Authorization": f"Bearer {effective_key}"}
-
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"Failed to fetch models: {e}") from e
-
-    models = data.get("data", [])
+        models = data.get("data", [])
 
     # Normalize and optionally filter
     normalized = []
@@ -118,9 +129,7 @@ async def list_models(
         display = m.get("name") or model_id
         if not model_id:
             continue
-        if only_gemini and not (
-            str(model_id).startswith("google/") or "gemini" in str(model_id).lower()
-        ):
+        if only_gemini and "gemini" not in str(model_id).lower():
             continue
         normalized.append({"id": model_id, "name": display})
 

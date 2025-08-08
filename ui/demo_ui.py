@@ -59,9 +59,9 @@ if "messages" not in st.session_state:
 if "rate_limit_info" not in st.session_state:
     st.session_state.rate_limit_info = {"limit": 0, "remaining": 0, "reset": 0}
 if "selected_model_name" not in st.session_state:
-    st.session_state.selected_model_name = "Gemini Pro (OpenRouter)"
+    st.session_state.selected_model_name = "Gemini 2.0 Flash (Google AI Studio)"
 if "selected_model_id" not in st.session_state:
-    st.session_state.selected_model_id = "google/gemini-1.5-pro-latest"
+    st.session_state.selected_model_id = "gemini-2.0-flash"
 if "temperature" not in st.session_state:
     st.session_state.temperature = 0.7
 if "max_tokens" not in st.session_state:
@@ -77,7 +77,7 @@ RATE_LIMIT_ENDPOINT = f"{API_BASE_URL}/api/v1/rate-limit/status"
 
 # Model configuration
 MODEL_OPTIONS = {
-    "Gemini Pro (OpenRouter)": "google/gemini-1.5-pro-latest",
+    "Gemini 2.0 Flash (Google AI Studio)": "gemini-2.0-flash",
     "Llama 3 70B (Groq)": "llama3-70b-8192",
     "ChatGPT-4o (OpenAI)": "gpt-4o",
 }
@@ -362,7 +362,11 @@ with col_right:
             selected_model_name = st.selectbox(
                 "🤖 Model Seçimi",
                 options=list(MODEL_OPTIONS.keys()),
-                index=list(MODEL_OPTIONS.keys()).index(st.session_state.selected_model_name),
+                index=list(MODEL_OPTIONS.keys()).index(
+                    st.session_state.selected_model_name
+                    if st.session_state.selected_model_name in MODEL_OPTIONS
+                    else list(MODEL_OPTIONS.keys())[0]
+                ),
                 help="Kullanılacak AI modelini seçin",
             )
             st.session_state.selected_model_name = selected_model_name
