@@ -26,7 +26,7 @@ st.markdown("*Parti politikaları hakkında AI destekli soru-cevap sistemi*")
 
 
 # --- Configuration (from Environment) ---
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:18000")
 API_KEY = os.getenv("API_KEY")  # optional, currently unused
 
 
@@ -42,9 +42,32 @@ def _validate_on_load() -> None:
                 timeout=6,
             )
             if r.ok and r.json().get("valid"):
-                st.session_state.verified_keys[prov] = True
+                # Use dict access; attribute access can raise if not pre-bound
+                st.session_state["verified_keys"][prov] = True
     except requests.RequestException:
         pass
+
+
+def _fetch_provider_statuses() -> dict[str, dict]:
+    """Fetch provider validation status for configured providers.
+
+    Returns a dict mapping provider -> {valid: bool, status: int, detail: any}.
+    """
+    results: dict[str, dict] = {}
+    for prov in ["openrouter", "groq", "google"]:
+        try:
+            r = requests.get(
+                f"{API_BASE_URL}/api/v1/providers/validate",
+                params={"provider": prov},
+                timeout=8,
+            )
+            if r.ok:
+                results[prov] = r.json()
+            else:
+                results[prov] = {"provider": prov, "valid": False, "status": r.status_code}
+        except requests.RequestException as e:
+            results[prov] = {"provider": prov, "valid": False, "status": 0, "detail": str(e)}
+    return results
 
 
 if "_keys_checked" not in st.session_state:
@@ -284,12 +307,14 @@ with col_right:
     # Page-like selector; default shows 'Yapılandırma Bilgileri'
     info_page = st.radio(
         "Bilgi Panelleri",
-        ["⚙️ Yapılandırma Bilgileri", "Ayarlar", "Durum"],
+        ["⚙️ Yapılandırma ve Durum", "Ayarlar"],
         index=0,
     )
 
-    if info_page == "⚙️ Yapılandırma Bilgileri":
+    if info_page == "⚙️ Yapılandırma ve Durum":
+        # --- Yapılandırma ---
         st.subheader("⚙️ Yapılandırma Bilgileri")
+        providers = _fetch_provider_statuses()
         st.json(
             {
                 "session_id": st.session_state.session_id,
@@ -297,10 +322,55 @@ with col_right:
                 "rate_limit_info": st.session_state.rate_limit_info,
                 "selected_model": st.session_state.selected_model_id,
                 "api_base_url": API_BASE_URL,
+                "api_base_url_note": (
+                    "Internal service URL detected; use http://localhost:18000 from your browser"
+                )
+                if "http://app:8000" in API_BASE_URL
+                else None,
                 "config_source": "Environment Variables (.env)",
                 "api_key_configured": bool(API_KEY),
+                "providers": providers,
             }
         )
+
+        st.divider()
+
+        # --- Durum ---
+        st.subheader("📱 Oturum Bilgileri")
+        st.caption(f"**Oturum ID:** `{st.session_state.session_id[:8]}...`")
+        if st.button("🔄 Oturumu Sıfırla", help="Yeni bir oturum başlatır ve geçmişi temizler"):
+            st.session_state.session_id = str(uuid.uuid4())
+            st.session_state.messages = []
+            st.session_state.rate_limit_info = {"limit": 0, "remaining": 0, "reset": 0}
+            st.success("✅ Oturum sıfırlandı!")
+            st.rerun()
+
+        st.divider()
+        st.subheader("🚦 Hız Sınırı Durumu")
+        rate_limit_container = st.container()
+
+        if st.session_state.rate_limit_info["limit"] == 0:
+            update_rate_limit_status()
+        if st.button("🔄 Durumu Yenile", help="Hız sınırı durumunu günceller"):
+            update_rate_limit_status()
+
+        info = st.session_state.rate_limit_info
+        if info["limit"] > 0:
+            remaining_pct = (info["remaining"] / info["limit"]) * 100
+            time_remaining = format_time_remaining(info["reset"])
+
+            rate_limit_container.progress(remaining_pct / 100)
+            rate_limit_container.info(
+                f"**Kalan İstek:** {info['remaining']}/{info['limit']}  \n"
+                f"**Sıfırlanma:** {time_remaining}"
+            )
+
+            if info["remaining"] <= 5 and info["remaining"] > 0:
+                st.warning(f"⚠️ Sadece {info['remaining']} isteğiniz kaldı!")
+            elif info["remaining"] == 0:
+                st.error("🚫 Hız sınırı aşıldı. Lütfen bekleyin.")
+        else:
+            rate_limit_container.info("🔍 Hız sınırı durumu yükleniyor...")
 
     elif info_page == "Ayarlar":
         st.subheader("Ayarlar")
@@ -394,43 +464,6 @@ with col_right:
             "💡 Model parametreleri şu anda yalnızca gösterge amaçlıdır. "
             "Gelecekteki sürümlerde aktif olacaktır."
         )
-
-    elif info_page == "Durum":
-        st.subheader("📱 Oturum Bilgileri")
-        st.caption(f"**Oturum ID:** `{st.session_state.session_id[:8]}...`")
-        if st.button("🔄 Oturumu Sıfırla", help="Yeni bir oturum başlatır ve geçmişi temizler"):
-            st.session_state.session_id = str(uuid.uuid4())
-            st.session_state.messages = []
-            st.session_state.rate_limit_info = {"limit": 0, "remaining": 0, "reset": 0}
-            st.success("✅ Oturum sıfırlandı!")
-            st.rerun()
-
-        st.divider()
-        st.subheader("🚦 Hız Sınırı Durumu")
-        rate_limit_container = st.container()
-
-        if st.session_state.rate_limit_info["limit"] == 0:
-            update_rate_limit_status()
-        if st.button("🔄 Durumu Yenile", help="Hız sınırı durumunu günceller"):
-            update_rate_limit_status()
-
-        info = st.session_state.rate_limit_info
-        if info["limit"] > 0:
-            remaining_pct = (info["remaining"] / info["limit"]) * 100
-            time_remaining = format_time_remaining(info["reset"])
-
-            rate_limit_container.progress(remaining_pct / 100)
-            rate_limit_container.info(
-                f"**Kalan İstek:** {info['remaining']}/{info['limit']}  \n"
-                f"**Sıfırlanma:** {time_remaining}"
-            )
-
-            if info["remaining"] <= 5 and info["remaining"] > 0:
-                st.warning(f"⚠️ Sadece {info['remaining']} isteğiniz kaldı!")
-            elif info["remaining"] == 0:
-                st.error("🚫 Hız sınırı aşıldı. Lütfen bekleyin.")
-        else:
-            rate_limit_container.info("🔍 Hız sınırı durumu yükleniyor...")
 
 # --- Footer ---
 st.divider()
