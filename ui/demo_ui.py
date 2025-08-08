@@ -25,14 +25,17 @@ st.title("🚀 Hürriyet Partisi AI Gateway")
 st.markdown("*Parti politikaları hakkında AI destekli soru-cevap sistemi*")
 
 
+# --- Configuration (from Environment) ---
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+API_KEY = os.getenv("API_KEY")  # optional, currently unused
+
+
 # Validate configured provider keys on first load
 def _validate_on_load() -> None:
     try:
-        headers = {"X-API-Key": API_KEY}
         for prov in ["openrouter", "groq", "google"]:
             r = requests.get(
                 f"{API_BASE_URL}/api/v1/providers/validate",
-                headers=headers,
                 params={"provider": prov},
                 timeout=6,
             )
@@ -64,11 +67,7 @@ if "max_tokens" not in st.session_state:
 if "verified_keys" not in st.session_state:
     st.session_state.verified_keys = {}
 
-# --- Configuration (Securely from Environment) ---
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
-API_KEY = os.getenv("API_KEY")
-
-# Optional API_KEY for future auth; no longer required for now
+# Optional API_KEY kept for future auth; not required now
 
 # API endpoints
 CHAT_ENDPOINT = f"{API_BASE_URL}/api/v1/chat"
@@ -89,14 +88,9 @@ def update_rate_limit_status() -> None:
     Uses the centrally configured API key from environment.
     """
     try:
-        headers = {"X-API-Key": API_KEY}
-        response = requests.get(RATE_LIMIT_ENDPOINT, headers=headers, timeout=5)
+        response = requests.get(RATE_LIMIT_ENDPOINT, timeout=5)
         if response.status_code == 200:
             st.session_state.rate_limit_info = response.json()
-        elif response.status_code == 401:
-            st.error("🔐 API anahtarı geçersiz. Lütfen .env dosyasını kontrol edin.")
-        elif response.status_code == 422:
-            st.error("🔐 API anahtarı eksik. Lütfen .env dosyasını kontrol edin.")
     except requests.RequestException:
         # Fail silently for rate limit status checks to avoid UI clutter
         pass
@@ -113,11 +107,10 @@ def get_chatbot_response(question: str, model: str) -> requests.Response | None:
     Returns:
         Response object if successful, None otherwise
     """
-    headers = {"X-API-Key": API_KEY}
     payload = {"question": question, "session_id": st.session_state.session_id, "model": model}
 
     try:
-        response = requests.post(CHAT_ENDPOINT, json=payload, headers=headers, timeout=90)
+        response = requests.post(CHAT_ENDPOINT, json=payload, timeout=90)
         response.raise_for_status()
         return response
     except requests.exceptions.HTTPError as e:
@@ -130,9 +123,7 @@ def get_chatbot_response(question: str, model: str) -> requests.Response | None:
         except requests.exceptions.JSONDecodeError:
             error_detail = e.response.text
 
-        if status_code == 401:
-            st.error(f"{error_msg}Geçersiz API anahtarı. Lütfen .env dosyasını kontrol edin.")
-        elif status_code == 422:
+        if status_code == 422:
             st.error(f"{error_msg}Geçersiz istek. {error_detail}")
         elif status_code == 429:
             st.warning(f"{error_msg}Hız sınırı aşıldı. Lütfen daha sonra tekrar deneyin.")
@@ -318,11 +309,9 @@ with col_right:
             )
             if st.button("Doğrula") and user_api_key:
                 try:
-                    headers = {"X-API-Key": API_KEY}
                     params = {"provider": provider, "api_key": user_api_key}
                     r = requests.get(
                         f"{API_BASE_URL}/api/v1/providers/validate",
-                        headers=headers,
                         params=params,
                         timeout=15,
                     )
@@ -338,10 +327,8 @@ with col_right:
         # Server-validated model fetch
         if st.button("🔍 Mevcut Modelleri Getir (OpenRouter)"):
             try:
-                headers = {"X-API-Key": API_KEY}
                 r = requests.get(
                     f"{API_BASE_URL}/api/v1/models?provider=openrouter&only_gemini=true",
-                    headers=headers,
                     timeout=10,
                 )
                 r.raise_for_status()
