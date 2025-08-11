@@ -42,12 +42,12 @@ langfuse_client = langfuse.Langfuse(
 )
 
 
-async def _call_rag_engine(question: str, session_id: str):
+async def _call_rag_engine(question: str, session_id: str, model: str | None):
     """Call RAG engine preferring async path with sync fallback."""
     try:
-        return await get_chat_response_async(question, session_id)
+        return await get_chat_response_async(question, session_id, model)
     except Exception:
-        return get_chat_response(question, session_id)
+        return get_chat_response(question, session_id, model)
 
 
 def _extract_answer_and_sources(rag_response) -> tuple[str, list[SourceNode]]:
@@ -125,7 +125,7 @@ async def handle_chat(request: ChatRequest, _rl: None = Depends(rate_limit)):
             trace_id=trace_id,
         )
 
-        rag_response = await _call_rag_engine(request.question, request.session_id)
+        rag_response = await _call_rag_engine(request.question, request.session_id, request.model)
         raw_answer, sources = _extract_answer_and_sources(rag_response)
 
         # Fallback to direct LLM if RAG returned empty/placeholder

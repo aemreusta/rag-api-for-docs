@@ -10,6 +10,7 @@ This module provides a unified interface for multiple LLM providers with:
 """
 
 import asyncio
+import contextvars
 import json
 import random
 import time
@@ -47,6 +48,11 @@ logger = get_logger(__name__)
 
 # Get metrics backend for provider monitoring
 metrics = VectorSearchMetrics()
+
+# Per-request model preference (used by LlamaIndex paths that don't pass model explicitly)
+_model_preference_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "llm_model_preference", default=None
+)
 
 
 class ProviderType(Enum):
@@ -870,6 +876,10 @@ class LLMRouter(CustomLLM):
             num_output=1024,  # Conservative estimate
         )
 
+    # LlamaIndex hook: capture model preference from external callers via context var
+    def set_model_preference(self, preferred_model: str | None) -> None:
+        _model_preference_ctx.set(preferred_model)
+
     def _get_cache_key(self, provider: LLMProvider, model: str, error_type: ErrorType) -> str:
         """Generate cache key for failed provider."""
         return f"failed_provider:{provider.provider_type.value}:{model}:{error_type.value}"
@@ -1009,7 +1019,8 @@ class LLMRouter(CustomLLM):
         """Complete method with automatic fallback across providers."""
         last_error = None
 
-        provider_order = self._apply_model_preference(model)
+        preferred = model or _model_preference_ctx.get()
+        provider_order = self._apply_model_preference(preferred)
         for provider in provider_order:
             # Skip providers that are cached as failed
             error_type = ErrorType.TIMEOUT  # Default error type for checking cache
@@ -1064,7 +1075,8 @@ class LLMRouter(CustomLLM):
         """Streaming complete method with automatic fallback across providers."""
         last_error = None
 
-        provider_order = self._apply_model_preference(model)
+        preferred = model or _model_preference_ctx.get()
+        provider_order = self._apply_model_preference(preferred)
         for provider in provider_order:
             # Skip providers that are cached as failed
             error_type = ErrorType.TIMEOUT  # Default error type for checking cache

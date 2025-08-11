@@ -65,19 +65,22 @@ def _cache_key_for_chat_response(question: str, session_id: str) -> str:
 
 @vector_metrics.time_vector_search
 @cached(ttl=settings.CACHE_TTL_SECONDS, key_func=_cache_key_for_chat_response)
-async def get_chat_response_async(question: str, session_id: str) -> Any:
+async def get_chat_response_async(question: str, session_id: str, model: str | None = None) -> Any:
     """Get chat response with caching and flexible performance monitoring."""
     # NOTE: For now, session_id is a placeholder. Real memory will be added in Phase 3.
     # This engine will internally condense the question but doesn't have persistent memory yet.
 
     # Run the chat in executor since LlamaIndex chat_engine.chat is synchronous
     loop = asyncio.get_event_loop()
+    # Propagate per-request model preference to LlamaIndex flows via context var
+    if hasattr(llm_router, "set_model_preference"):
+        llm_router.set_model_preference(model)
     response = await loop.run_in_executor(None, chat_engine.chat, question)
     return response
 
 
 @vector_metrics.time_vector_search
-def get_chat_response(question: str, session_id: str) -> Any:
+def get_chat_response(question: str, session_id: str, model: str | None = None) -> Any:
     """
     Get chat response with flexible performance monitoring.
 
@@ -86,6 +89,8 @@ def get_chat_response(question: str, session_id: str) -> Any:
     # Check if cache is enabled
     if not settings.CACHE_ENABLED:
         # Bypass cache and call directly
+        if hasattr(llm_router, "set_model_preference"):
+            llm_router.set_model_preference(model)
         response = chat_engine.chat(question)
         return response
 
@@ -99,4 +104,4 @@ def get_chat_response(question: str, session_id: str) -> Any:
 
     # Important: do NOT close the loop here; other async components may
     # still rely on it within the same request lifecycle.
-    return loop.run_until_complete(get_chat_response_async(question, session_id))
+    return loop.run_until_complete(get_chat_response_async(question, session_id, model))
