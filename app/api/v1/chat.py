@@ -81,8 +81,8 @@ def _create_streaming_response(
 
         return StreamingResponse(provider_streamer(), media_type="text/plain; charset=utf-8")
     except Exception:
-        # Fallback to simple chunked streaming for long answers
-        if answer_text and len(answer_text) > 300:
+        # Fallback to simple chunked streaming using available answer text
+        if answer_text:
 
             async def streamer():
                 chunk_size = 256
@@ -164,7 +164,9 @@ async def handle_chat(request: ChatRequest, _rl: None = Depends(rate_limit)):
 
         generation.end(output=response.model_dump())
 
-        if request.stream:
+        # Stream either on explicit request or when the final answer is lengthy
+        should_stream = bool(request.stream) or (len(response.answer) > 300)
+        if should_stream:
             streaming = _create_streaming_response(request.question, response.answer, request.model)
             if streaming is not None:
                 return streaming
