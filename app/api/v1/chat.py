@@ -10,6 +10,28 @@ from app.core.logging_config import get_logger, get_trace_id
 from app.core.query_engine import get_chat_response, get_chat_response_async, llm_router
 from app.schemas.chat import ChatRequest, ChatResponse, SourceNode
 
+
+async def _provider_or_chunk_generator(question: str, model: str | None, answer_text: str | None):
+    """Yield provider streaming chunks; on error, yield chunked fallback from answer_text."""
+    from llama_index.core.base.llms.types import ChatMessage, MessageRole
+
+    try:
+        async for chunk in llm_router.astream_complete(
+            [ChatMessage(role=MessageRole.USER, content=question)], model=model
+        ):
+            text = getattr(chunk, "text", None) or getattr(chunk, "delta", None) or ""
+            if text:
+                yield text
+        return
+    except Exception:
+        pass
+
+    if answer_text:
+        chunk_size = 256
+        for i in range(0, len(answer_text), chunk_size):
+            yield answer_text[i : i + chunk_size]
+
+
 router = APIRouter()
 logger = get_logger(__name__)
 
@@ -63,36 +85,11 @@ async def _llm_direct_answer(question: str, model: str | None) -> str | None:
 def _create_streaming_response(
     question: str, answer_text: str | None, model: str | None
 ) -> StreamingResponse | None:
-    """Create streaming response using provider streaming with chunked fallback.
-
-    Returns a StreamingResponse if streaming is possible/appropriate; otherwise None.
-    """
-    # Try true provider streaming first
-    try:
-        from llama_index.core.base.llms.types import ChatMessage, MessageRole
-
-        async def provider_streamer():
-            async for chunk in llm_router.astream_complete(
-                [ChatMessage(role=MessageRole.USER, content=question)], model=model
-            ):
-                text = getattr(chunk, "text", None) or getattr(chunk, "delta", None) or ""
-                if text:
-                    yield text
-
-        return StreamingResponse(provider_streamer(), media_type="text/plain; charset=utf-8")
-    except Exception:
-        # Fallback to simple chunked streaming using available answer text
-        if answer_text:
-
-            async def streamer():
-                chunk_size = 256
-                text = answer_text
-                for i in range(0, len(text), chunk_size):
-                    yield text[i : i + chunk_size]
-
-            return StreamingResponse(streamer(), media_type="text/plain; charset=utf-8")
-
-    return None
+    """Create streaming response using provider stream with chunked fallback."""
+    return StreamingResponse(
+        _provider_or_chunk_generator(question, model, answer_text),
+        media_type="text/plain; charset=utf-8",
+    )
 
 
 @router.post("/chat", response_model=ChatResponse)
