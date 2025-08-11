@@ -136,16 +136,17 @@ def get_chatbot_response(question: str, model: str) -> requests.Response | None:
         "question": question,
         "session_id": st.session_state.session_id,
         "model": model,
-        "stream": True,
+        "stream": st.session_state.get("stream_toggle", True),
     }
 
     try:
-        # Stream by default; fall back to non-stream if server replies JSON
-        with requests.post(CHAT_ENDPOINT, json=payload, timeout=90, stream=True) as r:
+        # Stream when enabled; fall back to non-stream if server replies JSON
+        use_stream = payload["stream"]
+        with requests.post(CHAT_ENDPOINT, json=payload, timeout=90, stream=use_stream) as r:
             r.raise_for_status()
             # Try to collect stream as plain text
             content_type = r.headers.get("Content-Type", "")
-            if content_type.startswith("text/plain"):
+            if use_stream and content_type.startswith("text/plain"):
                 full_text = "".join([chunk.decode("utf-8") for chunk in r.iter_content(256)])
 
                 # Synthesize a fake JSON-like response for rendering path
@@ -397,6 +398,7 @@ with col_right:
 
     elif info_page == "Ayarlar":
         st.subheader("Ayarlar")
+        st.toggle("Stream responses", key="stream_toggle", value=True)
         with st.expander("🔑 API Anahtarlarını Doğrula", expanded=False):
             provider = st.selectbox("Sağlayıcı", ["openrouter", "groq", "google"], index=0)
             user_api_key = st.text_input(
