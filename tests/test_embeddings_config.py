@@ -10,9 +10,12 @@ def test_default_embedding_is_gemini_google():
         patch.object(settings, "EMBEDDING_MODEL_NAME", "gemini-embedding-001"),
     ):
         model = get_embedding_model()
-        # The exact class may vary across llama-index versions; assert key behaviors
-        # It should expose an embed API and be truthy
+        # If the Google embedding class is available, we get it; otherwise, fallback to HF
+        from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
         assert model is not None
+        # Either a Google embedding or our HF fallback
+        assert hasattr(model, "embed") or isinstance(model, HuggingFaceEmbedding)
 
 
 def test_fallback_to_hf_when_google_unavailable(monkeypatch):
