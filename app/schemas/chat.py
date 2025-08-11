@@ -26,6 +26,10 @@ class ChatRequest(BaseModel):
         ..., min_length=1, description="Session identifier for conversation context"
     )
     stream: bool = Field(True, description="If true, stream the answer in chunks (when supported)")
+    model: str | None = Field(
+        default=None,
+        description="Optional model preference (e.g., gemini-2.0-flash, llama3-70b-8192, gpt-4o)",
+    )
 
 
 class ChatResponse(BaseModel):

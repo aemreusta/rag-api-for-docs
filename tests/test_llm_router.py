@@ -903,3 +903,19 @@ class TestLLMRouter:
             assert metadata.num_output == 1024
             assert metadata.is_chat_model is True
             assert metadata.model_name == "llm-router"
+
+
+def test_model_preference_orders_providers():
+    router = LLMRouter()
+
+    def types(providers):
+        return [p.provider_type.value for p in providers]
+
+    google_first = router._apply_model_preference("gemini-2.0-flash")
+    assert types(google_first)[0] in ("google", "openrouter")
+
+    groq_first = router._apply_model_preference("llama3-70b-8192")
+    assert types(groq_first)[0] == "groq"
+
+    openai_first = router._apply_model_preference("gpt-4o")
+    assert types(openai_first)[0] == "openai"

@@ -42,13 +42,13 @@ def _is_empty_answer(text: str) -> bool:
     return not text.strip() or text.strip().lower() == "empty response"
 
 
-async def _llm_direct_answer(question: str) -> str | None:
+async def _llm_direct_answer(question: str, model: str | None) -> str | None:
     """Direct LLM fallback when RAG returns empty answer."""
     try:
         from llama_index.core.base.llms.types import ChatMessage, MessageRole
 
         llm_result = await llm_router.acomplete(
-            [ChatMessage(role=MessageRole.USER, content=question)]
+            [ChatMessage(role=MessageRole.USER, content=question)], model=model
         )
         return getattr(llm_result, "text", None) or str(llm_result)
     except Exception as llm_err:  # pragma: no cover - logging path
@@ -60,7 +60,9 @@ async def _llm_direct_answer(question: str) -> str | None:
         return None
 
 
-def _create_streaming_response(question: str, answer_text: str | None) -> StreamingResponse | None:
+def _create_streaming_response(
+    question: str, answer_text: str | None, model: str | None
+) -> StreamingResponse | None:
     """Create streaming response using provider streaming with chunked fallback.
 
     Returns a StreamingResponse if streaming is possible/appropriate; otherwise None.
@@ -71,7 +73,7 @@ def _create_streaming_response(question: str, answer_text: str | None) -> Stream
 
         async def provider_streamer():
             async for chunk in llm_router.astream_complete(
-                [ChatMessage(role=MessageRole.USER, content=question)]
+                [ChatMessage(role=MessageRole.USER, content=question)], model=model
             ):
                 text = getattr(chunk, "text", None) or getattr(chunk, "delta", None) or ""
                 if text:
@@ -131,7 +133,7 @@ async def handle_chat(request: ChatRequest, _rl: None = Depends(rate_limit)):
 
         # Fallback to direct LLM if RAG returned empty/placeholder
         if _is_empty_answer(raw_answer):
-            llm_text = await _llm_direct_answer(request.question)
+            llm_text = await _llm_direct_answer(request.question, request.model)
             if llm_text and llm_text.strip():
                 response = ChatResponse(answer=llm_text, sources=[])
                 generation.end(output=response.model_dump())
@@ -163,7 +165,7 @@ async def handle_chat(request: ChatRequest, _rl: None = Depends(rate_limit)):
         generation.end(output=response.model_dump())
 
         if request.stream:
-            streaming = _create_streaming_response(request.question, response.answer)
+            streaming = _create_streaming_response(request.question, response.answer, request.model)
             if streaming is not None:
                 return streaming
 
