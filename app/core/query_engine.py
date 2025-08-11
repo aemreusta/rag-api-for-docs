@@ -15,17 +15,16 @@ from typing import Any
 
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.chat_engine import CondenseQuestionChatEngine
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.postgres import PGVectorStore
 
 from app.core.cache import cache_key_for_chat, cached
 from app.core.config import settings
+from app.core.embeddings import get_embedding_model
 from app.core.llm_router import LLMRouter
 from app.core.metrics import vector_metrics
 
-# Set up the embedding model first (384-dim; matches settings.EMBEDDING_DIM)
-embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
-Settings.embed_model = embed_model
+# Set up the embedding model from settings (provider/model handled in helper)
+Settings.embed_model = get_embedding_model()
 
 # Initialize components
 vector_store = PGVectorStore.from_params(
