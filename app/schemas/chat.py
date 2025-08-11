@@ -25,6 +25,7 @@ class ChatRequest(BaseModel):
     session_id: str = Field(
         ..., min_length=1, description="Session identifier for conversation context"
     )
+    stream: bool = Field(True, description="If true, stream the answer in chunks (when supported)")
 
 
 class ChatResponse(BaseModel):

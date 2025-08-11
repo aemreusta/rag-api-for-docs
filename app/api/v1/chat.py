@@ -2,6 +2,7 @@ import time
 
 import langfuse
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.api.deps import rate_limit
 from app.core.config import settings
@@ -17,6 +18,79 @@ langfuse_client = langfuse.Langfuse(
     secret_key=settings.LANGFUSE_SECRET_KEY,
     host=settings.LANGFUSE_HOST,
 )
+
+
+async def _call_rag_engine(question: str, session_id: str):
+    """Call RAG engine preferring async path with sync fallback."""
+    try:
+        return await get_chat_response_async(question, session_id)
+    except Exception:
+        return get_chat_response(question, session_id)
+
+
+def _extract_answer_and_sources(rag_response) -> tuple[str, list[SourceNode]]:
+    """Extract primary answer text and sources from a RAG response."""
+    raw_answer = str(rag_response) if rag_response is not None else ""
+    sources = [
+        SourceNode.from_llama_index(node) for node in getattr(rag_response, "source_nodes", [])
+    ]
+    return raw_answer, sources
+
+
+def _is_empty_answer(text: str) -> bool:
+    """Determine if an answer is empty or placeholder."""
+    return not text.strip() or text.strip().lower() == "empty response"
+
+
+async def _llm_direct_answer(question: str) -> str | None:
+    """Direct LLM fallback when RAG returns empty answer."""
+    try:
+        from llama_index.core.base.llms.types import ChatMessage, MessageRole
+
+        llm_result = await llm_router.acomplete(
+            [ChatMessage(role=MessageRole.USER, content=question)]
+        )
+        return getattr(llm_result, "text", None) or str(llm_result)
+    except Exception as llm_err:  # pragma: no cover - logging path
+        logger.warning(
+            "LLM fallback failed",
+            error=str(llm_err),
+            error_type=type(llm_err).__name__,
+        )
+        return None
+
+
+def _create_streaming_response(question: str, answer_text: str | None) -> StreamingResponse | None:
+    """Create streaming response using provider streaming with chunked fallback.
+
+    Returns a StreamingResponse if streaming is possible/appropriate; otherwise None.
+    """
+    # Try true provider streaming first
+    try:
+        from llama_index.core.base.llms.types import ChatMessage, MessageRole
+
+        async def provider_streamer():
+            async for chunk in llm_router.astream_complete(
+                [ChatMessage(role=MessageRole.USER, content=question)]
+            ):
+                text = getattr(chunk, "text", None) or getattr(chunk, "delta", None) or ""
+                if text:
+                    yield text
+
+        return StreamingResponse(provider_streamer(), media_type="text/plain; charset=utf-8")
+    except Exception:
+        # Fallback to simple chunked streaming for long answers
+        if answer_text and len(answer_text) > 300:
+
+            async def streamer():
+                chunk_size = 256
+                text = answer_text
+                for i in range(0, len(text), chunk_size):
+                    yield text[i : i + chunk_size]
+
+            return StreamingResponse(streamer(), media_type="text/plain; charset=utf-8")
+
+    return None
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -52,40 +126,17 @@ async def handle_chat(request: ChatRequest, _rl: None = Depends(rate_limit)):
             trace_id=trace_id,
         )
 
-        # Prefer async path to avoid event loop mixing
-        try:
-            rag_response = await get_chat_response_async(request.question, request.session_id)
-        except Exception:
-            # Fallback to sync path (uses cached wrapper) if needed
-            rag_response = get_chat_response(request.question, request.session_id)
+        rag_response = await _call_rag_engine(request.question, request.session_id)
+        raw_answer, sources = _extract_answer_and_sources(rag_response)
 
-        # Primary answer from RAG
-        raw_answer = str(rag_response) if rag_response is not None else ""
-        sources = [
-            SourceNode.from_llama_index(node) for node in getattr(rag_response, "source_nodes", [])
-        ]
+        # Fallback to direct LLM if RAG returned empty/placeholder
+        if _is_empty_answer(raw_answer):
+            llm_text = await _llm_direct_answer(request.question)
+            if llm_text and llm_text.strip():
+                response = ChatResponse(answer=llm_text, sources=[])
+                generation.end(output=response.model_dump())
+                return response
 
-        # If underlying RAG returns an empty placeholder, fall back to direct LLM
-        if not raw_answer.strip() or raw_answer.strip().lower() == "empty response":
-            try:
-                from llama_index.core.base.llms.types import ChatMessage, MessageRole
-
-                llm_result = await llm_router.acomplete(
-                    [ChatMessage(role=MessageRole.USER, content=request.question)]
-                )
-                llm_text = getattr(llm_result, "text", None) or str(llm_result)
-                if llm_text and llm_text.strip():
-                    response = ChatResponse(answer=llm_text, sources=[])
-                    generation.end(output=response.model_dump())
-                    return response
-            except Exception as llm_err:
-                logger.warning(
-                    "LLM fallback failed",
-                    error=str(llm_err),
-                    error_type=type(llm_err).__name__,
-                    trace_id=trace_id,
-                )
-            # As a last resort, raise a specific RAG-empty error that clients can detect
             generation.end(level="ERROR", status_message="RAG returned empty answer")
             raise HTTPException(
                 status_code=502,
@@ -110,6 +161,12 @@ async def handle_chat(request: ChatRequest, _rl: None = Depends(rate_limit)):
         )
 
         generation.end(output=response.model_dump())
+
+        if request.stream:
+            streaming = _create_streaming_response(request.question, response.answer)
+            if streaming is not None:
+                return streaming
+
         return response
 
     except Exception as e:

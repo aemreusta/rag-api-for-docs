@@ -102,11 +102,11 @@ ingest: ## Run data ingestion (one-time setup)
 	docker compose exec app uv run python scripts/ingest_simple.py
 
 ## Dependencies
-deps-compile: ## Compile dependencies
-	docker compose exec app uv pip compile requirements.in -o requirements.txt
+deps-compile: ## Compile development dependencies (single source of truth)
+	docker compose exec app uv pip compile requirements-dev.in -o requirements-dev.txt -c requirements.in
 
-deps-sync: ## Sync dependencies
-	docker compose exec app uv pip sync --system requirements.txt
+deps-sync: ## Sync development dependencies
+	docker compose exec app uv pip sync --system requirements-dev.txt
 
 ## Cleanup
 clean: ## Remove all containers, volumes, and images
