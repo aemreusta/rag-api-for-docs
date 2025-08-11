@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     PDF_DOCUMENTS_DIR: str = "pdf_documents"
 
     # Vector Embeddings Settings
+    EMBEDDING_PROVIDER: str = "hf"  # hf | openai | google
+    EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
     EMBEDDING_DIM: int = 1536  # Default dim to match tests and Gemini embeddings
 
     # Metrics & Monitoring Settings

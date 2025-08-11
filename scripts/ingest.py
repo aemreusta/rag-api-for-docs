@@ -40,6 +40,7 @@ from llama_index.llms.openrouter import OpenRouter
 from llama_index.vector_stores.postgres import PGVectorStore
 
 from app.core.config import settings
+from app.core.embeddings import get_embedding_model
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -75,8 +76,8 @@ def main():
     LlamaSettings.llm = OpenRouter(
         api_key=settings.OPENROUTER_API_KEY, model=settings.LLM_MODEL_NAME
     )
-    # Using a default local embedding model for ingestion is fast and free
-    LlamaSettings.embed_model = "local:BAAI/bge-small-en-v1.5"
+    # Use configured embedding model/provider for ingestion as well
+    LlamaSettings.embed_model = get_embedding_model()
 
     # Load documents from the PDF directory
     logger.info(f"Loading documents from {PDF_DIRECTORY}...")
