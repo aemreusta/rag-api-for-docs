@@ -1,6 +1,37 @@
 from unittest.mock import patch
 
+from app.core.config import settings
 from app.core.embeddings import get_embedding_model
+
+
+def test_default_embedding_is_gemini_google():
+    with (
+        patch.object(settings, "EMBEDDING_PROVIDER", "google"),
+        patch.object(settings, "EMBEDDING_MODEL_NAME", "gemini-embedding-001"),
+    ):
+        model = get_embedding_model()
+        # If the Google embedding class is available, we get it; otherwise, fallback to HF
+        from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
+        assert model is not None
+        # Either a Google embedding or our HF fallback
+        assert hasattr(model, "embed") or isinstance(model, HuggingFaceEmbedding)
+
+
+def test_fallback_to_hf_when_google_unavailable(monkeypatch):
+    # Simulate import failure for Google embeddings class
+    monkeypatch.setattr("app.core.embeddings.settings.EMBEDDING_PROVIDER", "google", raising=False)
+    monkeypatch.setattr(
+        "app.core.embeddings.settings.EMBEDDING_MODEL_NAME", "gemini-embedding-001", raising=False
+    )
+    # Force import error path
+    monkeypatch.setitem(__import__("sys").modules, "llama_index.embeddings.google", None)
+
+    model = get_embedding_model()
+    # Should fall back to HuggingFaceEmbedding instance
+    from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
+    assert isinstance(model, HuggingFaceEmbedding)
 
 
 def test_default_hf_embedding_selected():

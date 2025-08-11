@@ -250,6 +250,7 @@ Edit `.env` and replace placeholder values:
 | `GROQ_API_KEY` | `your_key` | For Groq/Llama3 access |
 | `OPENAI_API_KEY` | `your_key` | For OpenAI/ChatGPT access |
 | `LLM_MODEL_NAME` | `google/gemini-1.5-pro-latest` | Default model name |
+| `GOOGLE_AI_STUDIO_API_KEY` | `your_key` | Required for Gemini API |
 
 #### **New: Flexible Monitoring Configuration**
 
@@ -377,16 +378,16 @@ _For MVP choose Option A – zero plugin overhead._
 
 Select and configure the embedding provider via environment:
 
-- `EMBEDDING_PROVIDER`: `hf` | `openai` | `google` (default: `hf`)
-- `EMBEDDING_MODEL_NAME`: provider-specific model id
-- `EMBEDDING_DIM`: vector dimension (must match DB schema and index)
+- `EMBEDDING_PROVIDER`: `hf` | `openai` | `google` (default: `google`)
+- `EMBEDDING_MODEL_NAME`: provider-specific model id (default: `gemini-embedding-001`)
+- `EMBEDDING_DIM`: vector dimension (must match DB schema and index; MRL dims `3072|1536|768`, default `1536`)
 
 Examples:
 
 ```bash
-# HuggingFace (default)
-EMBEDDING_PROVIDER=hf
-EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+# Gemini (default)
+EMBEDDING_PROVIDER=google
+EMBEDDING_MODEL_NAME=gemini-embedding-001
 EMBEDDING_DIM=1536
 
 # OpenAI
@@ -394,10 +395,11 @@ EMBEDDING_PROVIDER=openai
 EMBEDDING_MODEL_NAME=text-embedding-3-large
 EMBEDDING_DIM=3072
 
-# Google
-EMBEDDING_PROVIDER=google
-EMBEDDING_MODEL_NAME=text-embedding-004
-EMBEDDING_DIM=1536
+# Quick links (Gemini)
+
+- Gemini API reference: https://ai.google.dev/api?lang=python
+- Gemini text generation: https://ai.google.dev/gemini-api/docs/text-generation
+- Gemini embeddings: https://ai.google.dev/gemini-api/docs/embeddings
 ```
 
 ## 📊 Monitoring & Observability

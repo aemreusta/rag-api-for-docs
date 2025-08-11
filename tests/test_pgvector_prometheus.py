@@ -61,5 +61,5 @@ class TestPgVectorPrometheus:
         from app.core.config import settings
 
         assert hasattr(settings, "EMBEDDING_DIM"), "Should have EMBEDDING_DIM setting"
-        assert settings.EMBEDDING_DIM == 1536, "Should be configured for 1536 dimensions"
+        assert settings.EMBEDDING_DIM in (768, 1536, 3072), "Should be one of supported MRL dims"
         assert isinstance(settings.EMBEDDING_DIM, int), "Should be integer type"
