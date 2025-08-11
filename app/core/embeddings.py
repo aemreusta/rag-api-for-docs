@@ -25,8 +25,8 @@ def get_embedding_model() -> Any:
 
             return GoogleTextEmbedding(model_name=model_name)
         except Exception:  # pragma: no cover
-            # Fall through to HF if Google embeddings are unavailable
-            pass
+            # Fall back safely to a well-known HF model to keep tests/envs running
+            return HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
     # Default HF fallback
     return HuggingFaceEmbedding(model_name=model_name)
