@@ -24,12 +24,7 @@ from groq.types.chat import ChatCompletionChunk
 from llama_index.core.base.llms.types import ChatMessage, CompletionResponse
 from llama_index.core.llms import LLMMetadata
 from llama_index.core.llms.custom import CustomLLM
-
-try:
-    # Preferred new provider (removes deprecation warning)
-    from llama_index.llms.google_genai import GoogleGenAI as Gemini
-except Exception:  # pragma: no cover - fallback for environments without the new package
-    from llama_index.llms.gemini import Gemini
+from llama_index.llms.google_genai import GoogleGenAI as Gemini
 from llama_index.llms.openai import OpenAI
 from llama_index.llms.openrouter import OpenRouter
 from pydantic import PrivateAttr

@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -27,8 +27,11 @@ def test_chat_endpoint_without_api_key():
     assert response.status_code in (200, 500)
 
 
-def test_chat_endpoint_with_invalid_api_key():
+@patch("app.api.v1.chat.get_chat_response_async", new_callable=AsyncMock)
+def test_chat_endpoint_with_invalid_api_key(mock_rag_async):
     """Auth disabled: invalid key should be ignored."""
+    # Minimal async RAG mock to avoid un-awaited coroutine warnings
+    mock_rag_async.return_value = MagicMock(__str__=lambda _: "OK", source_nodes=[])
     response = client.post(
         "/api/v1/chat",
         json={
@@ -42,8 +45,9 @@ def test_chat_endpoint_with_invalid_api_key():
 
 
 @patch("app.api.v1.chat.get_chat_response")
+@patch("app.api.v1.chat.get_chat_response_async", new_callable=AsyncMock)
 @patch("app.api.v1.chat.langfuse_client")
-def test_chat_endpoint_successful_response(mock_langfuse, mock_get_chat_response):
+def test_chat_endpoint_successful_response(mock_langfuse, mock_rag_async, mock_get_chat_response):
     """Test successful chat endpoint response."""
     # Mock Langfuse
     mock_trace = MagicMock()
@@ -62,6 +66,7 @@ def test_chat_endpoint_successful_response(mock_langfuse, mock_get_chat_response
         )
     ]
     mock_get_chat_response.return_value = mock_response
+    mock_rag_async.return_value = mock_response
 
     # Make request
     response = client.post(
@@ -87,8 +92,9 @@ def test_chat_endpoint_successful_response(mock_langfuse, mock_get_chat_response
 
 
 @patch("app.api.v1.chat.get_chat_response")
+@patch("app.api.v1.chat.get_chat_response_async", new_callable=AsyncMock)
 @patch("app.api.v1.chat.langfuse_client")
-def test_chat_endpoint_handles_errors(mock_langfuse, mock_get_chat_response):
+def test_chat_endpoint_handles_errors(mock_langfuse, mock_rag_async, mock_get_chat_response):
     """Test that chat endpoint handles errors gracefully."""
     # Mock Langfuse
     mock_trace = MagicMock()
@@ -98,6 +104,7 @@ def test_chat_endpoint_handles_errors(mock_langfuse, mock_get_chat_response):
 
     # Mock error in chat response
     mock_get_chat_response.side_effect = Exception("Test error")
+    mock_rag_async.side_effect = Exception("Test error")
 
     # Make request
     response = client.post(
@@ -141,8 +148,11 @@ def test_chat_request_validation():
     ],
 )
 @patch("app.api.v1.chat.get_chat_response")
+@patch("app.api.v1.chat.get_chat_response_async", new_callable=AsyncMock)
 @patch("app.api.v1.chat.langfuse_client")
-def test_chat_endpoint_various_inputs(mock_langfuse, mock_get_chat_response, question, session_id):
+def test_chat_endpoint_various_inputs(
+    mock_langfuse, mock_rag_async, mock_get_chat_response, question, session_id
+):
     """Test chat endpoint with various valid inputs."""
     # Mock response
     mock_langfuse.trace.return_value.generation.return_value = MagicMock()
@@ -150,6 +160,7 @@ def test_chat_endpoint_various_inputs(mock_langfuse, mock_get_chat_response, que
     mock_response.__str__ = lambda x: f"Answer to: {question}"
     mock_response.source_nodes = []
     mock_get_chat_response.return_value = mock_response
+    mock_rag_async.return_value = mock_response
 
     response = client.post(
         "/api/v1/chat",
@@ -170,8 +181,11 @@ async def redis_cleaner():
 
 @pytest.mark.asyncio
 @patch("app.api.v1.chat.get_chat_response")
+@patch("app.api.v1.chat.get_chat_response_async", new_callable=AsyncMock)
 @patch("app.api.v1.chat.langfuse_client")
-async def test_chat_endpoint_rate_limiting(mock_langfuse, mock_get_chat_response, redis_cleaner):
+async def test_chat_endpoint_rate_limiting(
+    mock_langfuse, mock_rag_async, mock_get_chat_response, redis_cleaner
+):
     """Test that rate limiting is applied to the chat endpoint."""
     # Import here to get the actual rate limiting function
     from app.api.deps import rate_limit
@@ -182,6 +196,7 @@ async def test_chat_endpoint_rate_limiting(mock_langfuse, mock_get_chat_response
     mock_response.__str__ = lambda x: "This is a test answer."
     mock_response.source_nodes = []
     mock_get_chat_response.return_value = mock_response
+    mock_rag_async.return_value = mock_response
     mock_langfuse.trace.return_value.generation.return_value = MagicMock()
 
     # Create a test rate limiting function with a low limit
