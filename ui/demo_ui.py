@@ -132,35 +132,12 @@ def get_chatbot_response(question: str, model: str) -> requests.Response | None:
     Returns:
         Response object if successful, None otherwise
     """
-    payload = {
-        "question": question,
-        "session_id": st.session_state.session_id,
-        "model": model,
-        "stream": True,
-    }
+    payload = {"question": question, "session_id": st.session_state.session_id, "model": model}
 
     try:
-        # Stream by default; fall back to non-stream if server replies JSON
-        with requests.post(CHAT_ENDPOINT, json=payload, timeout=90, stream=True) as r:
-            r.raise_for_status()
-            # Try to collect stream as plain text
-            content_type = r.headers.get("Content-Type", "")
-            if content_type.startswith("text/plain"):
-                full_text = "".join([chunk.decode("utf-8") for chunk in r.iter_content(256)])
-
-                # Synthesize a fake JSON-like response for rendering path
-                class _Resp:
-                    def json(self_inner):
-                        return {"answer": full_text, "sources": []}
-
-                    @property
-                    def status_code(self_inner):
-                        return r.status_code
-
-                return _Resp()  # type: ignore[return-value]
-            else:
-                # Non-stream JSON path
-                return r
+        response = requests.post(CHAT_ENDPOINT, json=payload, timeout=90)
+        response.raise_for_status()
+        return response
     except requests.exceptions.HTTPError as e:
         status_code = e.response.status_code
         # Do not display raw HTTP error banners for 5xx; return None to trigger friendly fallback
