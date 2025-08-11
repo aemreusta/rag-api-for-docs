@@ -968,11 +968,49 @@ class LLMRouter(CustomLLM):
             # Re-raise the error if it shouldn't trigger fallback
             raise
 
-    async def acomplete(self, messages: list[ChatMessage], **kwargs) -> CompletionResponse:
+    def _apply_model_preference(self, preferred_model: str | None) -> list[LLMProvider]:
+        """Reorder or filter providers based on preferred model alias.
+
+        Simple mapping:
+        - gemini* -> prioritize Google/OpenRouter
+        - llama3* -> prioritize Groq
+        - gpt-*   -> prioritize OpenAI
+        """
+        if not preferred_model:
+            return self._available_providers
+
+        m = preferred_model.lower()
+        # Buckets
+        google_like = []
+        groq_like = []
+        openai_like = []
+        others = []
+        for p in self._available_providers:
+            if p.provider_type in (ProviderType.GOOGLE, ProviderType.OPENROUTER):
+                google_like.append(p)
+            elif p.provider_type == ProviderType.GROQ:
+                groq_like.append(p)
+            elif p.provider_type == ProviderType.OPENAI:
+                openai_like.append(p)
+            else:
+                others.append(p)
+
+        if m.startswith("gemini") or m.startswith("google"):
+            return google_like + groq_like + openai_like + others
+        if m.startswith("llama3"):
+            return groq_like + google_like + openai_like + others
+        if m.startswith("gpt-") or m.startswith("chatgpt"):
+            return openai_like + google_like + groq_like + others
+        return self._available_providers
+
+    async def acomplete(
+        self, messages: list[ChatMessage], model: str | None = None, **kwargs
+    ) -> CompletionResponse:
         """Complete method with automatic fallback across providers."""
         last_error = None
 
-        for provider in self._available_providers:
+        provider_order = self._apply_model_preference(model)
+        for provider in provider_order:
             # Skip providers that are cached as failed
             error_type = ErrorType.TIMEOUT  # Default error type for checking cache
             if self._is_provider_cached_as_failed(provider, error_type):
@@ -1021,12 +1059,13 @@ class LLMRouter(CustomLLM):
                 loop.close()
 
     async def astream_complete(
-        self, messages: list[ChatMessage], **kwargs
+        self, messages: list[ChatMessage], model: str | None = None, **kwargs
     ) -> AsyncGenerator[CompletionResponse, None]:
         """Streaming complete method with automatic fallback across providers."""
         last_error = None
 
-        for provider in self._available_providers:
+        provider_order = self._apply_model_preference(model)
+        for provider in provider_order:
             # Skip providers that are cached as failed
             error_type = ErrorType.TIMEOUT  # Default error type for checking cache
             if self._is_provider_cached_as_failed(provider, error_type):
