@@ -45,10 +45,13 @@ class Settings(BaseSettings):
     # Document Settings
     PDF_DOCUMENTS_DIR: str = "pdf_documents"
 
-    # Vector Embeddings Settings
-    EMBEDDING_PROVIDER: str = "hf"  # hf | openai | google
-    EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
-    EMBEDDING_DIM: int = 1536  # Default dim to match tests and Gemini embeddings
+    # Vector Embeddings Settings (default: Google Gemini Embedding)
+    # Options: hf | openai | google
+    EMBEDDING_PROVIDER: str = "google"
+    # Default to GA Gemini embedding model id
+    EMBEDDING_MODEL_NAME: str = "gemini-embedding-001"
+    # Matryoshka Representation Learning dims supported: 3072 | 1536 | 768
+    EMBEDDING_DIM: int = 1536
 
     # Metrics & Monitoring Settings
     METRICS_BACKEND: str = "auto"  # auto, prometheus, datadog, opentelemetry, noop

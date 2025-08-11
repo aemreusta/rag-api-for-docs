@@ -377,16 +377,16 @@ _For MVP choose Option A – zero plugin overhead._
 
 Select and configure the embedding provider via environment:
 
-- `EMBEDDING_PROVIDER`: `hf` | `openai` | `google` (default: `hf`)
-- `EMBEDDING_MODEL_NAME`: provider-specific model id
-- `EMBEDDING_DIM`: vector dimension (must match DB schema and index)
+- `EMBEDDING_PROVIDER`: `hf` | `openai` | `google` (default: `google`)
+- `EMBEDDING_MODEL_NAME`: provider-specific model id (default: `gemini-embedding-001`)
+- `EMBEDDING_DIM`: vector dimension (must match DB schema and index; MRL dims `3072|1536|768`, default `1536`)
 
 Examples:
 
 ```bash
 # HuggingFace (default)
-EMBEDDING_PROVIDER=hf
-EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+EMBEDDING_PROVIDER=google
+EMBEDDING_MODEL_NAME=gemini-embedding-001
 EMBEDDING_DIM=1536
 
 # OpenAI
@@ -396,7 +396,7 @@ EMBEDDING_DIM=3072
 
 # Google
 EMBEDDING_PROVIDER=google
-EMBEDDING_MODEL_NAME=text-embedding-004
+EMBEDDING_MODEL_NAME=gemini-embedding-001
 EMBEDDING_DIM=1536
 ```
 

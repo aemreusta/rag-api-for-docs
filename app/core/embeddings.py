@@ -20,10 +20,12 @@ def get_embedding_model() -> Any:
             pass
     elif provider in ("google", "gemini", "google_genai"):
         try:
+            # Prefer Google GenAI embedding class if available
             from llama_index.embeddings.google import GoogleTextEmbedding
 
             return GoogleTextEmbedding(model_name=model_name)
         except Exception:  # pragma: no cover
+            # Fall through to HF if Google embeddings are unavailable
             pass
 
     # Default HF fallback
