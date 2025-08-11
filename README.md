@@ -373,6 +373,33 @@ _For MVP choose Option A – zero plugin overhead._
 - **POST** `/chat` - Proxied chat endpoint with load balancing
 - **GET** `/static/chat.js` - WordPress widget script
 
+### Flexible Embeddings Configuration
+
+Select and configure the embedding provider via environment:
+
+- `EMBEDDING_PROVIDER`: `hf` | `openai` | `google` (default: `hf`)
+- `EMBEDDING_MODEL_NAME`: provider-specific model id
+- `EMBEDDING_DIM`: vector dimension (must match DB schema and index)
+
+Examples:
+
+```bash
+# HuggingFace (default)
+EMBEDDING_PROVIDER=hf
+EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+EMBEDDING_DIM=1536
+
+# OpenAI
+EMBEDDING_PROVIDER=openai
+EMBEDDING_MODEL_NAME=text-embedding-3-large
+EMBEDDING_DIM=3072
+
+# Google
+EMBEDDING_PROVIDER=google
+EMBEDDING_MODEL_NAME=text-embedding-004
+EMBEDDING_DIM=1536
+```
+
 ## 📊 Monitoring & Observability
 
 ### Flexible Monitoring Architecture ✅
