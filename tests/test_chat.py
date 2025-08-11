@@ -17,7 +17,11 @@ def test_chat_endpoint_without_api_key():
     """Auth disabled: endpoint should work without API key."""
     response = client.post(
         "/api/v1/chat",
-        json={"question": "What is the volunteer policy?", "session_id": "test-session"},
+        json={
+            "question": "What is the volunteer policy?",
+            "session_id": "test-session",
+            "stream": False,
+        },
     )
     # Either 200 on happy path or 500 friendly error on internal failure
     assert response.status_code in (200, 500)
@@ -62,7 +66,11 @@ def test_chat_endpoint_successful_response(mock_langfuse, mock_get_chat_response
     # Make request
     response = client.post(
         "/api/v1/chat",
-        json={"question": "What is the volunteer policy?", "session_id": "test-session"},
+        json={
+            "question": "What is the volunteer policy?",
+            "session_id": "test-session",
+            "stream": False,
+        },
     )
 
     # Verify response
@@ -109,17 +117,17 @@ def test_chat_endpoint_handles_errors(mock_langfuse, mock_get_chat_response):
 def test_chat_request_validation():
     """Test request validation for required fields."""
     # Missing question
-    response = client.post("/api/v1/chat", json={"session_id": "test-session"})
+    response = client.post("/api/v1/chat", json={"session_id": "test-session", "stream": False})
     assert response.status_code == 422
 
     # Missing session_id
-    response = client.post("/api/v1/chat", json={"question": "Test question"})
+    response = client.post("/api/v1/chat", json={"question": "Test question", "stream": False})
     assert response.status_code == 422
 
     # Empty question
     response = client.post(
         "/api/v1/chat",
-        json={"question": "", "session_id": "test-session"},
+        json={"question": "", "session_id": "test-session", "stream": False},
     )
     assert response.status_code == 422
 
@@ -145,7 +153,7 @@ def test_chat_endpoint_various_inputs(mock_langfuse, mock_get_chat_response, que
 
     response = client.post(
         "/api/v1/chat",
-        json={"question": question, "session_id": session_id},
+        json={"question": question, "session_id": session_id, "stream": False},
     )
 
     assert response.status_code == 200
@@ -190,6 +198,7 @@ async def test_chat_endpoint_rate_limiting(mock_langfuse, mock_get_chat_response
             json_payload = {
                 "question": "What is the volunteer policy?",
                 "session_id": "test-session-rate-limit",
+                "stream": False,
             }
 
             # First two requests should succeed
