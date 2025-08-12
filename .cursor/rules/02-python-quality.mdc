@@ -55,7 +55,15 @@ def get_name(data: dict) -> str | None:
 - **`[valid-type]` Error**: You used the keyword `any`. You meant to use `Any` from the `typing` module. **ALWAYS** `from typing import Any`.
 - **`[dict-item]` Errors**: Your dictionary is typed as `dict[str, float]` but you are trying to assign a `None` value. Change the type to `dict[str, float | None]`.
 
-### 3. Ruff Linting & Formatting
+### 3. Ruff Linting & Formatting (Repository-Enforced)
 
-- All code MUST be formatted with `ruff-format` and pass `ruff` linter checks.
-- This includes writing clean, idiomatic Python (f-strings, comprehensions, etc.).
+- All code MUST be formatted with `ruff format .` and pass `ruff check .` using the config in `pyproject.toml`.
+- **Line length**: 100 characters (Ruff `E501`).
+  - Break long function calls and argument lists across multiple lines.
+  - Prefer multi-line over long one-liners.
+  - Keep comments/docstrings wrapped to <= 100 characters.
+- **Quoting**: Use double quotes (Ruff formatter default).
+- **Imports**: Maintain import order compatible with Ruff (isort via Ruff `I`).
+- If a line is close to 100 characters, wrap proactively to avoid `E501`.
+- Avoid adding TODO comments; implement the change or create an issue instead.
+- Write clean, idiomatic Python (f-strings, comprehensions when clear, explicit types for public APIs).
