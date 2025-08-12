@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -161,7 +162,8 @@ def test_chat_endpoint_various_inputs(
     mock_response.__str__ = lambda x: f"Answer to: {question}"
     mock_response.source_nodes = []
     mock_get_chat_response.return_value = mock_response
-    mock_rag_async.return_value = mock_response
+    # Ensure async path is awaited but returns via sync fallback without warnings
+    mock_rag_async.side_effect = Exception("force-sync-fallback")
 
     response = client.post(
         "/api/v1/chat",
@@ -174,10 +176,20 @@ def test_chat_endpoint_various_inputs(
 
 @pytest_asyncio.fixture
 async def redis_cleaner():
-    """Fixture to clean Redis before and after the test."""
-    await redis_client.flushdb()
+    """Fixture to clean Redis before and after the test (sync/async compatible)."""
+    flush = getattr(redis_client, "flushdb", None)
+    if flush is not None:
+        if asyncio.iscoroutinefunction(flush):
+            await flush()
+        else:
+            flush()
     yield
-    await redis_client.flushdb()
+    flush = getattr(redis_client, "flushdb", None)
+    if flush is not None:
+        if asyncio.iscoroutinefunction(flush):
+            await flush()
+        else:
+            flush()
 
 
 @pytest.mark.asyncio

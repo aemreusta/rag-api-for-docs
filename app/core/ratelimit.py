@@ -45,7 +45,8 @@ class RateLimiter:
         # This implementation uses a sliding window. Every request extends the
         # window expiration, which is a common and effective approach.
         pipe = self.redis.pipeline()
-        pipe.incr(key)
+        # Support both sync and asyncio Redis clients
+        incr_result = pipe.incr(key)
         pipe.expire(key, self.window)
 
         # Redis may be unavailable (network down) or require authentication that the
@@ -56,7 +57,10 @@ class RateLimiter:
         # such non-production scenarios.
 
         try:
-            results = await pipe.execute()
+            # Some clients return an awaitable, others a plain list
+            results = pipe.execute()
+            if hasattr(results, "__await__"):
+                results = await results  # type: ignore[func-returns-value]
         except (redis.AuthenticationError, redis.ConnectionError) as exc:  # type: ignore[attr-defined]
             logger.warning(
                 "Rate limiter disabled - Redis error",
@@ -67,7 +71,8 @@ class RateLimiter:
             )
             return
 
-        request_count = results[0]
+        # Pipeline returns list of results in order of commands
+        request_count = results[0] if isinstance(results, (list, tuple)) else incr_result
 
         if request_count > self.limit:
             logger.warning(
