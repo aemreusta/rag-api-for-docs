@@ -556,6 +556,10 @@ python-json-logger==3.3.0
     # via -r requirements.in
 python-magic==0.4.27
     # via unstructured
+python-multipart==0.0.20
+    # via
+    #   -r requirements-dev.in
+    #   -r requirements.in
 python-oxmsg==0.0.2
     # via unstructured
 pytz==2025.2

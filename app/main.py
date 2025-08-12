@@ -3,7 +3,7 @@ import contextlib
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import chat, status
+from app.api.v1 import chat, docs, status
 from app.api.v1 import models as models_api
 from app.core.config import settings
 from app.core.cors import get_cors_config
@@ -63,3 +63,4 @@ def health_check():
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(status.router, prefix="/api/v1")
 app.include_router(models_api.router, prefix="/api/v1")
+app.include_router(docs.router, prefix="/api/v1")
