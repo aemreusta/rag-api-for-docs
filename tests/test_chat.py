@@ -91,10 +91,11 @@ def test_chat_endpoint_successful_response(mock_langfuse, mock_rag_async, mock_g
     mock_generation.end.assert_called_once()
 
 
+@pytest.mark.asyncio
 @patch("app.api.v1.chat.get_chat_response")
 @patch("app.api.v1.chat.get_chat_response_async", new_callable=AsyncMock)
 @patch("app.api.v1.chat.langfuse_client")
-def test_chat_endpoint_handles_errors(mock_langfuse, mock_rag_async, mock_get_chat_response):
+async def test_chat_endpoint_handles_errors(mock_langfuse, mock_rag_async, mock_get_chat_response):
     """Test that chat endpoint handles errors gracefully."""
     # Mock Langfuse
     mock_trace = MagicMock()
