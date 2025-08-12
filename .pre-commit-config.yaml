@@ -70,7 +70,7 @@ repos:
   # 5. General File & Config Quality (YAML, TOML, etc.)
   # ===================================================================
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-yaml
         args: [--allow-multiple-documents]
