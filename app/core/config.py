@@ -50,8 +50,8 @@ class Settings(BaseSettings):
     EMBEDDING_PROVIDER: str = "google"
     # Default Gemini embedding model
     EMBEDDING_MODEL_NAME: str = "gemini-embedding-001"
-    # Default dimension aligned to Gemini default output (MRL)
-    EMBEDDING_DIM: int = 3072
+    # Default dimension aligned with pgvector HNSW limit (≤2000)
+    EMBEDDING_DIM: int = 1536
 
     # Metrics & Monitoring Settings
     METRICS_BACKEND: str = "auto"  # auto, prometheus, datadog, opentelemetry, noop

@@ -87,7 +87,7 @@ def main():
         api_key=settings.OPENROUTER_API_KEY, model=settings.LLM_MODEL_NAME
     )
     # Prefer HF padded to DB dim during ingestion to avoid external quota limits while
-    # keeping DB dimension compatible with runtime Gemini (3072)
+    # keeping DB dimension compatible with runtime embeddings
     from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
     class PaddedHFEmbedding(BaseEmbedding):
@@ -128,7 +128,7 @@ def main():
         port=5432,
         user=settings.POSTGRES_USER,
         table_name="content_embeddings",
-        embed_dim=settings.EMBEDDING_DIM,  # Must match DB (3072 for Gemini)
+        embed_dim=settings.EMBEDDING_DIM,  # Must match DB (1536 for Gemini default)
     )
 
     # Build the index (manual embedding to avoid remote provider)
