@@ -36,16 +36,13 @@ class DocumentDetail(DocumentSummary):
     pass
 
 
-_sentinel = object()
+# Use a module-level singleton default to satisfy ruff B008
+UPLOAD_FILE_FORM = File(...)
 
 
 @router.post("/upload", response_model=DocumentDetail, status_code=201)
-async def upload_document(file: UploadFile | object = _sentinel) -> DocumentDetail:
-    # Use File(...) only at runtime to satisfy ruff B008
-    if file is _sentinel:
-        file = File(...)
-
-    if not isinstance(file, UploadFile) or not file.filename:
+async def upload_document(file: UploadFile = UPLOAD_FILE_FORM) -> DocumentDetail:
+    if not file or not file.filename:
         raise HTTPException(status_code=400, detail="File is required")
 
     doc_id = str(uuid.uuid4())
