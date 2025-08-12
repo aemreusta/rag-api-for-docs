@@ -65,6 +65,14 @@ def _normalize_dsn(url: str) -> str:
     return url
 
 
+def _sanitize_text(text: str) -> str:
+    """Remove non-printable characters and trim whitespace."""
+    if text is None:
+        return ""
+    sanitized = "".join(ch for ch in text if ch.isprintable())
+    return sanitized.strip()
+
+
 def main():
     logger.info("Starting simplified data ingestion process...")
 
@@ -92,7 +100,12 @@ def main():
 
     # Load documents from the PDF directory
     logger.info(f"Loading documents from {PDF_DIRECTORY}...")
-    reader = SimpleDirectoryReader(input_dir=PDF_DIRECTORY)
+    reader = SimpleDirectoryReader(
+        input_dir=PDF_DIRECTORY,
+        required_exts=[".pdf"],
+        exclude_hidden=True,
+        recursive=True,
+    )
     documents = reader.load_data()
     max_docs = int(os.getenv("INGEST_MAX_DOCS", "60"))
     if len(documents) > max_docs:
@@ -119,9 +132,21 @@ def main():
 
     # Convert documents to nodes
     nodes = node_parser.get_nodes_from_documents(documents)
+    # Sanitize and drop empty/near-empty chunks to avoid provider errors
+    for n in nodes:
+        content = _sanitize_text(n.get_content() or "")
+        n.text = content  # ensure node content is sanitized in-place
+    nodes = [n for n in nodes if n.get_content() and len(n.get_content()) >= 3]
+    if not nodes:
+        logger.warning("No non-empty chunks found after parsing. Nothing to ingest.")
+        return
     # Compute embeddings using the configured ingestion embed model
     embedder = LlamaSettings.embed_model
-    texts = [n.get_content() for n in nodes]
+    texts = [_sanitize_text(n.get_content() or "") for n in nodes]
+    texts = [t for t in texts if t and len(t) >= 3]
+    if not texts:
+        logger.warning("No non-empty texts to embed. Skipping embedding step.")
+        return
     embeddings = embedder.get_text_embedding_batch(texts)
     for n, e in zip(nodes, embeddings, strict=False):
         n.embedding = e
