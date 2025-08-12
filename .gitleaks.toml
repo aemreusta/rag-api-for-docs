@@ -1,0 +1,8 @@
+title = "gitleaks config"
+
+[allowlist]
+description = "Allow example env placeholders and test fixtures"
+paths = [
+  "^.env.example$",
+]
+

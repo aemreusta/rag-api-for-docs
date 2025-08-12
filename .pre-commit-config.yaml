@@ -44,6 +44,7 @@ repos:
     hooks:
       - id: gitleaks
         name: Detect hardcoded secrets
+        args: ["--config=.gitleaks.toml"]
 
   # ===================================================================
   # 4. Documentation & Text Quality (Markdown, Typos)
@@ -63,8 +64,8 @@ repos:
           # Add "bu" (lowercase) and "Bu" (uppercase) to ignore list for Turkish
           - --ignore-words-list=aeu,ba,caf,datas,emreusta,te,thist,sur,ser,nin,bu,Bu,anormal,normal
           - --skip="*.csv,*.json,*.lock"
-        # Exclude the data directory and notebooks from typo checks
-        exclude: ^data/|.*\.ipynb$
+        # Exclude the data directory, notebooks, and generated Turkish samples
+        exclude: ^data/|^pdf_documents/samples/|.*\.ipynb$
 
   # ===================================================================
   # 5. General File & Config Quality (YAML, TOML, etc.)

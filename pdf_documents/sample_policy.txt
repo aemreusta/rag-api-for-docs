@@ -1,3 +1,0 @@
-Sample Policy
-
-This is an auto-generated sample policy document for tests.
