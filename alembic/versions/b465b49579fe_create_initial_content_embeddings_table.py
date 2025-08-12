@@ -47,8 +47,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_query_logs_id"), "query_logs", ["id"], unique=False)
-    op.drop_index(op.f("charity_policies_idx_1"), table_name="data_charity_policies")
-    op.drop_table("data_charity_policies")
+    # Drop legacy artifacts only if they exist (fresh DBs won't have them)
+    op.execute("DROP INDEX IF EXISTS charity_policies_idx_1;")
+    op.execute("DROP TABLE IF EXISTS data_charity_policies;")
     # ### end Alembic commands ###
 
 
