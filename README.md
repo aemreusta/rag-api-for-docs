@@ -144,6 +144,7 @@ make clickhouse-test      # One-shot smoke tests
 ```bash
 make clean             # Remove all containers, volumes, and images
 make clean-pyc         # Remove Python cache files
+make rebuild           # Rebuild with Docker build cache mounts (faster)
 ```
 
 ## Performance Achievements ✅

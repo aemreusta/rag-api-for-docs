@@ -135,10 +135,10 @@ langfuse-logs: ## View Langfuse service logs
 
 ## Build & Deploy
 rebuild: ## Rebuild all Docker images without cache
-	docker compose build --no-cache
+	DOCKER_BUILDKIT=1 docker compose build --no-cache
 
 rebuild-app: ## Rebuild only the app service
-	docker compose build --no-cache app
+	DOCKER_BUILDKIT=1 docker compose build --no-cache app
 
 ## Health Checks
 health-check: ## Run comprehensive health checks
