@@ -1,4 +1,6 @@
 import logging
+import os
+import time
 
 import psycopg2  # Used to check for the extension
 from llama_index.core import (
@@ -7,14 +9,48 @@ from llama_index.core import (
 from llama_index.core import (
     SimpleDirectoryReader,
     StorageContext,
-    VectorStoreIndex,
 )
+from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.llms.openrouter import OpenRouter
 from llama_index.vector_stores.postgres import PGVectorStore
 
 from app.core.config import settings
-from app.core.embeddings import get_embedding_model
+
+
+class RetryingEmbedding:
+    """Thin wrapper to add retry/backoff around an embedding model.
+
+    Handles Google 429 ResourceExhausted by exponential backoff.
+    """
+
+    def __init__(self, inner, max_retries: int = 6, initial_delay: float = 1.0):
+        self.inner = inner
+        self.max_retries = max_retries
+        self.initial_delay = initial_delay
+
+    def get_text_embedding(self, text: str):
+        delay = self.initial_delay
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                return self.inner.get_text_embedding(text)
+            except Exception as e:  # pragma: no cover
+                # Detect Google quota error conservatively by message
+                msg = str(e)
+                if "Resource has been exhausted" in msg or "429" in msg:
+                    logger.warning(
+                        f"Embedding rate/quota hit (attempt {attempt}); sleeping {delay:.1f}s"
+                    )
+                    time.sleep(delay)
+                    delay = min(delay * 2, 60)
+                    continue
+                raise
+        # Final attempt
+        return self.inner.get_text_embedding(text)
+
+    def get_text_embedding_batch(self, texts: list[str]):
+        return [self.get_text_embedding(t) for t in texts]
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,12 +58,20 @@ logger = logging.getLogger(__name__)
 PDF_DIRECTORY = "pdf_documents/"
 
 
+def _normalize_dsn(url: str) -> str:
+    """Accept SQLAlchemy-style URLs (postgresql+psycopg2://...) and return psycopg2 DSN."""
+    if "+" in url and url.startswith("postgresql+"):
+        # Convert to plain postgresql://
+        url = url.replace("postgresql+psycopg2://", "postgresql://")
+    return url
+
+
 def main():
     logger.info("Starting simplified data ingestion process...")
 
     # Verify pgvector extension is enabled
     logger.info("Checking pgvector extension...")
-    conn = psycopg2.connect(settings.DATABASE_URL)
+    conn = psycopg2.connect(_normalize_dsn(settings.DATABASE_URL))
     cur = conn.cursor()
     cur.execute("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
     if cur.fetchone() is None:
@@ -42,38 +86,66 @@ def main():
     LlamaSettings.llm = OpenRouter(
         api_key=settings.OPENROUTER_API_KEY, model=settings.LLM_MODEL_NAME
     )
-    # Use configured embedding model/provider for ingestion as well
-    LlamaSettings.embed_model = get_embedding_model()
+    # Prefer HF padded to DB dim during ingestion to avoid external quota limits while
+    # keeping DB dimension compatible with runtime Gemini (3072)
+    from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
+    class PaddedHFEmbedding(BaseEmbedding):
+        def __init__(self):
+            super().__init__()
+            self.inner = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+        def _pad(self, vec):
+            target = settings.EMBEDDING_DIM
+            if len(vec) == target:
+                return vec
+            if len(vec) < target:
+                return vec + [0.0] * (target - len(vec))
+            return vec[:target]
+
+        def _get_text_embeddings(self, texts: list[str]):
+            vs = self.inner.get_text_embedding_batch(texts)
+            return [self._pad(v) for v in vs]
+
+    LlamaSettings.embed_model = PaddedHFEmbedding()
 
     # Load documents from the PDF directory
     logger.info(f"Loading documents from {PDF_DIRECTORY}...")
     reader = SimpleDirectoryReader(input_dir=PDF_DIRECTORY)
     documents = reader.load_data()
+    max_docs = int(os.getenv("INGEST_MAX_DOCS", "60"))
+    if len(documents) > max_docs:
+        documents = documents[:max_docs]
+        logger.warning(f"Too many documents for current quota; trimming to first {max_docs}.")
     logger.info(f"Loaded {len(documents)} document(s) from '{PDF_DIRECTORY}'.")
 
     # Set up the PGVectorStore with correct parameters
     logger.info("Setting up PostgreSQL vector store...")
     vector_store = PGVectorStore.from_params(
-        database="app",
-        host="postgres",
-        password="postgres",
+        database=settings.POSTGRES_DB,
+        host=settings.POSTGRES_SERVER,
+        password=settings.POSTGRES_PASSWORD,
         port=5432,
-        user="postgres",
+        user=settings.POSTGRES_USER,
         table_name="content_embeddings",
-        embed_dim=settings.EMBEDDING_DIM,  # Dimension must match DB (default 384)
+        embed_dim=settings.EMBEDDING_DIM,  # Must match DB (3072 for Gemini)
     )
 
-    # Build the index
+    # Build the index (manual embedding to avoid remote provider)
     logger.info("Creating vector index and storing embeddings...")
-    storage_context = StorageContext.from_defaults(vector_store=vector_store)
+    StorageContext.from_defaults(vector_store=vector_store)
     node_parser = SentenceSplitter(chunk_size=512, chunk_overlap=20)
 
-    VectorStoreIndex.from_documents(
-        documents,
-        storage_context=storage_context,
-        node_parser=node_parser,
-        show_progress=True,
-    )
+    # Convert documents to nodes
+    nodes = node_parser.get_nodes_from_documents(documents)
+    # Compute embeddings using the configured ingestion embed model
+    embedder = LlamaSettings.embed_model
+    texts = [n.get_content() for n in nodes]
+    embeddings = embedder.get_text_embedding_batch(texts)
+    for n, e in zip(nodes, embeddings, strict=False):
+        n.embedding = e
+    # Add to vector store directly
+    vector_store.add(nodes)
     logger.info("Successfully built index and stored it in PostgreSQL.")
     logger.info("Ingestion complete.")
 

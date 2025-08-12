@@ -22,11 +22,11 @@ def upgrade() -> None:
     # 1. Ensure pgvector extension is available (required for VECTOR type and HNSW)
     op.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
-    # 2. Convert content_vector from TEXT to VECTOR(1536) to align with Gemini embeddings
+    # 2. Convert content_vector from TEXT to VECTOR(3072) to align with Gemini embeddings
     # Since DB is empty (development), we can do direct ALTER TYPE
     op.execute("""
         ALTER TABLE content_embeddings
-        ALTER COLUMN content_vector TYPE VECTOR(1536)
+        ALTER COLUMN content_vector TYPE VECTOR(3072)
         USING CASE
             WHEN content_vector IS NULL THEN NULL
             ELSE content_vector::vector
@@ -34,13 +34,18 @@ def upgrade() -> None:
     """)
 
     # 3. Create HNSW index with optimized parameters for development
-    # m=32, ef_construction=64 balance performance vs accuracy
-    op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS content_embeddings_vector_hnsw_idx
-        ON content_embeddings
-        USING hnsw (content_vector vector_l2_ops)
-        WITH (m = 32, ef_construction = 64);
-    """)
+    # Note: CONCURRENTLY cannot run inside a transaction; use Alembic autocommit block
+    from alembic import op as _op  # alias to access context utils
+
+    with _op.get_context().autocommit_block():
+        op.execute(
+            """
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS content_embeddings_vector_hnsw_idx
+            ON content_embeddings
+            USING hnsw (content_vector vector_l2_ops)
+            WITH (m = 32, ef_construction = 64);
+            """
+        )
 
     # 4. Set query-time parameter for optimal recall (can be overridden per session)
     op.execute("ALTER DATABASE app SET hnsw.ef_search = 100;")
