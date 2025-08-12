@@ -118,10 +118,21 @@ def test_pdf_directory_exists():
     assert os.path.exists("pdf_documents/"), "PDF documents directory should exist"
 
 
-def test_sample_pdf_exists():
-    """Test that our sample PDF file exists."""
-    sample_pdf = "pdf_documents/sample_policy.pdf"
-    assert os.path.exists(sample_pdf), f"Sample PDF should exist at {sample_pdf}"
+def test_sample_pdfs_and_texts_exist():
+    """Test that generated sample PDFs and text excerpts exist."""
+    samples_dir = "pdf_documents/samples"
+    assert os.path.isdir(samples_dir), f"Samples directory should exist at {samples_dir}"
+
+    expected_files = [
+        "hürriyet_partisi_tüzüğü_v3_page1.pdf",
+        "hürriyet_partisi_tüzüğü_v3_pages1-3.pdf",
+        "hürriyet_partisi_tüzüğü_v3_excerpt_p10-14.pdf",
+        "hürriyet_partisi_tüzüğü_v3_full.txt",
+        "hürriyet_partisi_tüzüğü_v3_excerpt_pages1-3.txt",
+    ]
+
+    missing = [f for f in expected_files if not os.path.exists(os.path.join(samples_dir, f))]
+    assert not missing, f"Missing generated sample files: {missing}"
 
 
 def test_langfuse_imports():

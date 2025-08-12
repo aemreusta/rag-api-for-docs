@@ -26,3 +26,4 @@ structlog
 python-json-logger
 prometheus_client
 uv
+python-multipart

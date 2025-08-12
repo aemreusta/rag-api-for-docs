@@ -43,7 +43,12 @@ if __name__ == "__main__":
     text_file = "pdf_documents/sample_policy.txt"
     pdf_file = "pdf_documents/sample_policy.pdf"
 
-    if os.path.exists(text_file):
-        create_pdf_from_text(text_file, pdf_file)
-    else:
-        print(f"Text file not found: {text_file}")
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(pdf_file), exist_ok=True)
+
+    # Create a default sample text if missing
+    if not os.path.exists(text_file):
+        with open(text_file, "w", encoding="utf-8") as f:
+            f.write("Sample Policy\n\nThis is an auto-generated sample policy document for tests.")
+
+    create_pdf_from_text(text_file, pdf_file)

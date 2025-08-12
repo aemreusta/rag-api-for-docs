@@ -16,13 +16,11 @@ def _create_redis_client():  # noqa: D401 – factory helper
     # If the test runner is active we swap in *fakeredis* transparently so that
     # rate-limiting and other Redis-backed features behave deterministically.
     if "pytest" in sys.modules:  # pragma: no cover – branch specific to tests
+        # Prefer the synchronous FakeRedis client in tests to avoid
+        # "coroutine ... was never awaited" warnings when code paths
+        # access Redis from sync contexts.
         try:
-            # fakeredis >=2.0 renamed "fakeredis.aioredis" to "fakeredis.asyncio".
-            # Import using the new path but fall back to the old one for compatibility.
-            try:
-                import fakeredis.asyncio as fakeredis  # type: ignore
-            except ModuleNotFoundError:  # pragma: no cover – back-compat with <2.x
-                import fakeredis.aioredis as fakeredis  # type: ignore
+            import fakeredis  # type: ignore
 
             return fakeredis.FakeRedis(decode_responses=True)
         except ModuleNotFoundError:  # Safety net – fall through to real Redis.
