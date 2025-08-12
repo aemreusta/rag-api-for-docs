@@ -10,7 +10,6 @@ from llama_index.core import (
     SimpleDirectoryReader,
     StorageContext,
 )
-from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.llms.openrouter import OpenRouter
 from llama_index.vector_stores.postgres import PGVectorStore
@@ -86,28 +85,10 @@ def main():
     LlamaSettings.llm = OpenRouter(
         api_key=settings.OPENROUTER_API_KEY, model=settings.LLM_MODEL_NAME
     )
-    # Prefer HF padded to DB dim during ingestion to avoid external quota limits while
-    # keeping DB dimension compatible with runtime embeddings
-    from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+    # Use Gemini embeddings by default for ingestion
+    from app.core.embeddings import get_embedding_model
 
-    class PaddedHFEmbedding(BaseEmbedding):
-        def __init__(self):
-            super().__init__()
-            self.inner = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
-
-        def _pad(self, vec):
-            target = settings.EMBEDDING_DIM
-            if len(vec) == target:
-                return vec
-            if len(vec) < target:
-                return vec + [0.0] * (target - len(vec))
-            return vec[:target]
-
-        def _get_text_embeddings(self, texts: list[str]):
-            vs = self.inner.get_text_embedding_batch(texts)
-            return [self._pad(v) for v in vs]
-
-    LlamaSettings.embed_model = PaddedHFEmbedding()
+    LlamaSettings.embed_model = get_embedding_model()
 
     # Load documents from the PDF directory
     logger.info(f"Loading documents from {PDF_DIRECTORY}...")
