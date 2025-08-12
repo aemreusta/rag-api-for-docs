@@ -9,8 +9,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 
-def create_pdf_from_text(text_file_path, pdf_file_path):
-    """Convert text file to PDF."""
+def create_pdf_from_text(text_file_path: str, pdf_file_path: str) -> None:
+    """Convert a UTF-8 text file at ``text_file_path`` into a PDF at ``pdf_file_path``."""
     # Read the text file
     with open(text_file_path, encoding="utf-8") as f:
         content = f.read()

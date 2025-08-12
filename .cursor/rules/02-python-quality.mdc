@@ -12,6 +12,7 @@ This is the most important rule. Generating code that passes our static analysis
 Almost all our `mypy` errors come from incorrectly handling values that could be `None` or are typed as `Any`. You MUST write defensive code.
 
 #### **A. Strict `None` Handling**
+
 Before you use a variable in any operation (arithmetic, attribute access, passing to a function that expects a non-optional type), you **MUST** check if it is `None`.
 
 ```python
