@@ -28,6 +28,7 @@ services:
           - type=registry,ref=ghcr.io/aemreusta/chatbot-api-service:cache
         cache-to:
           - type=inline
+    image: chatbot-api-service-app:dev
     <<: *default-env
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports: ["18000:8000"]
@@ -276,9 +277,7 @@ services:
 
   # ───────────────────────────── Celery background workers ──────────────────────────────
   celery-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: chatbot-api-service-app:dev
     <<: *default-env
     command: celery -A app.core.jobs.celery_app worker --loglevel=INFO --hostname=worker@%h
     volumes:
@@ -290,9 +289,7 @@ services:
     networks: [app-network]
 
   celery-beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: chatbot-api-service-app:dev
     <<: *default-env
     command: celery -A app.core.jobs.celery_app beat --loglevel=INFO
     volumes:
