@@ -119,10 +119,13 @@ def test_pdf_directory_exists():
 
 
 def test_sample_pdfs_and_texts_exist():
-    """Test that generated sample PDFs and text excerpts exist."""
-    samples_dir = "pdf_documents/samples"
-    assert os.path.isdir(samples_dir), f"Samples directory should exist at {samples_dir}"
+    """Ensure generated sample PDFs and text excerpts exist, generating them if missing."""
+    import subprocess
+    import sys
+    from pathlib import Path
 
+    project_root = Path(__file__).resolve().parents[1]
+    samples_dir = project_root / "pdf_documents" / "samples"
     expected_files = [
         "hürriyet_partisi_tüzüğü_v3_page1.pdf",
         "hürriyet_partisi_tüzüğü_v3_pages1-3.pdf",
@@ -131,8 +134,20 @@ def test_sample_pdfs_and_texts_exist():
         "hürriyet_partisi_tüzüğü_v3_excerpt_pages1-3.txt",
     ]
 
-    missing = [f for f in expected_files if not os.path.exists(os.path.join(samples_dir, f))]
-    assert not missing, f"Missing generated sample files: {missing}"
+    samples_dir.mkdir(parents=True, exist_ok=True)
+
+    missing = [f for f in expected_files if not (samples_dir / f).exists()]
+    if missing:
+        script = project_root / "scripts" / "generate_samples_from_pdf.py"
+        source_pdf = project_root / "pdf_documents" / "Hürriyet Partisi Tüzüğü v3.pdf"
+        assert source_pdf.exists(), f"Source policy PDF missing at {source_pdf}"
+        try:
+            subprocess.run([sys.executable, str(script), str(source_pdf)], check=True)
+        except subprocess.CalledProcessError as e:
+            raise AssertionError(f"Failed to generate samples via {script}: {e}") from e
+
+    still_missing = [f for f in expected_files if not (samples_dir / f).exists()]
+    assert not still_missing, f"Missing generated sample files: {still_missing}"
 
 
 def test_langfuse_imports():
