@@ -144,6 +144,14 @@ make clickhouse-test      # One-shot smoke tests
 ```bash
 make clean             # Remove all containers, volumes, and images
 make clean-pyc         # Remove Python cache files
+make rebuild           # Rebuild with Docker build cache mounts (faster)
+
+# Speed up Docker builds
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
+
+# Build only base/deps stage in parallel to prime cache
+docker compose build --parallel app postgres redis
 ```
 
 ## Performance Achievements ✅

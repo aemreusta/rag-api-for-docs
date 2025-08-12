@@ -103,10 +103,10 @@ ingest: ## Run data ingestion (one-time setup)
 
 ## Dependencies
 deps-compile: ## Compile development dependencies (single source of truth)
-	docker compose exec app uv pip compile requirements-dev.in -o requirements-dev.txt -c requirements.in
+	docker compose exec app uv pip compile requirements/requirements-dev.in -o requirements/requirements-dev.txt -c requirements/requirements.in
 
 deps-sync: ## Sync development dependencies
-	docker compose exec app uv pip sync --system requirements-dev.txt
+	docker compose exec app uv pip sync --system requirements/requirements-dev.txt
 
 ## Cleanup
 clean: ## Remove all containers, volumes, and images
@@ -135,10 +135,10 @@ langfuse-logs: ## View Langfuse service logs
 
 ## Build & Deploy
 rebuild: ## Rebuild all Docker images without cache
-	docker compose build --no-cache
+	DOCKER_BUILDKIT=1 docker compose build --no-cache
 
 rebuild-app: ## Rebuild only the app service
-	docker compose build --no-cache app
+	DOCKER_BUILDKIT=1 docker compose build --no-cache app
 
 ## Health Checks
 health-check: ## Run comprehensive health checks
