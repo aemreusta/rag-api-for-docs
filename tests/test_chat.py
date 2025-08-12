@@ -31,8 +31,12 @@ def test_chat_endpoint_without_api_key():
 @patch("app.api.v1.chat.get_chat_response_async", new_callable=AsyncMock)
 def test_chat_endpoint_with_invalid_api_key(mock_rag_async):
     """Auth disabled: invalid key should be ignored."""
+
     # Minimal async RAG mock to avoid un-awaited coroutine warnings
-    mock_rag_async.return_value = MagicMock(__str__=lambda _: "OK", source_nodes=[])
+    async def _raise(*_args, **_kwargs):
+        raise Exception("force-sync-fallback")
+
+    mock_rag_async.side_effect = _raise
     response = client.post(
         "/api/v1/chat",
         json={
@@ -67,7 +71,11 @@ def test_chat_endpoint_successful_response(mock_langfuse, mock_rag_async, mock_g
         )
     ]
     mock_get_chat_response.return_value = mock_response
-    mock_rag_async.return_value = mock_response
+
+    async def _raise(*_args, **_kwargs):
+        raise Exception("force-sync-fallback")
+
+    mock_rag_async.side_effect = _raise
 
     # Make request
     response = client.post(
@@ -106,7 +114,11 @@ async def test_chat_endpoint_handles_errors(mock_langfuse, mock_rag_async, mock_
 
     # Mock error in chat response
     mock_get_chat_response.side_effect = Exception("Test error")
-    mock_rag_async.side_effect = Exception("Test error")
+
+    async def _raise_err(*_args, **_kwargs):
+        raise Exception("Test error")
+
+    mock_rag_async.side_effect = _raise_err
 
     # Make request
     response = client.post(
@@ -162,8 +174,11 @@ def test_chat_endpoint_various_inputs(
     mock_response.__str__ = lambda x: f"Answer to: {question}"
     mock_response.source_nodes = []
     mock_get_chat_response.return_value = mock_response
-    # Ensure async path is awaited but returns via sync fallback without warnings
-    mock_rag_async.side_effect = Exception("force-sync-fallback")
+
+    async def _raise(*_args, **_kwargs):
+        raise Exception("force-sync-fallback")
+
+    mock_rag_async.side_effect = _raise
 
     response = client.post(
         "/api/v1/chat",
