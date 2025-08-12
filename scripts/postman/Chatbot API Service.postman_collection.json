@@ -146,6 +146,56 @@
           ]
         }
       }
+    },
+    {
+      "name": "Chat (Streaming)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-API-Key", "value": "{{api_key}}", "disabled": true }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"{{question}}\",\n  \"session_id\": \"{{session_id}}\",\n  \"stream\": true\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/chat",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "chat"]
+        }
+      }
+    },
+    {
+      "name": "Chat (With Model)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-API-Key", "value": "{{api_key}}", "disabled": true }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"{{question}}\",\n  \"session_id\": \"{{session_id}}\",\n  \"model\": \"{{model}}\",\n  \"stream\": {{stream}}\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/chat",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "chat"]
+        }
+      }
+    },
+    {
+      "name": "Metrics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/metrics",
+          "host": ["{{base_url}}"],
+          "path": ["metrics"]
+        }
+      }
     }
   ],
   "event": [

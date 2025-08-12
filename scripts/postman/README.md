@@ -26,5 +26,12 @@
 - Provider validate: `GET {{base_url}}/api/v1/providers/validate?provider={{provider}}`
 - List models: `GET {{base_url}}/api/v1/models?provider={{provider}}&only_gemini=true`
 - Chat: `POST {{base_url}}/api/v1/chat` with body `{ "question": "...", "session_id": "..." }`
+  - Optional: `model` (e.g., `gemini-2.0-flash`, `llama3-70b-8192`, `gpt-4o`)
+  - Optional: `stream` (true/false). When true, response is `text/plain` streamed chunks
+  - Preset requests included: "Chat (Streaming)", "Chat (With Model)"
+
+Other:
+
+- Metrics: `GET {{base_url}}/metrics`
 
 Tip: If you run via Docker, ensure the backend is mapped to host port 18000 and reachable from your machine.
