@@ -92,18 +92,28 @@ class SensitiveDataFilter(logging.Filter):
             for pattern, replacement in self.SENSITIVE_PATTERNS:
                 record.msg = pattern.sub(replacement, record.msg)
 
-        # Apply redaction to args if they exist
+        # Apply redaction to args if they exist and are a sequence of strings.
+        # Important: Do NOT modify mapping args (dict). Some libraries (e.g. Celery)
+        # pass a mapping used for %-style formatting. Converting it breaks logging.
         if hasattr(record, "args") and record.args:
-            safe_args = []
-            for arg in record.args:
-                if isinstance(arg, str):
-                    safe_arg = arg
-                    for pattern, replacement in self.SENSITIVE_PATTERNS:
-                        safe_arg = pattern.sub(replacement, safe_arg)
-                    safe_args.append(safe_arg)
-                else:
-                    safe_args.append(arg)
-            record.args = tuple(safe_args)
+            if isinstance(record.args, dict):
+                # Leave mapping intact to preserve formatting expectations
+                pass
+            else:
+                try:
+                    safe_args = []
+                    for arg in record.args:
+                        if isinstance(arg, str):
+                            safe_arg = arg
+                            for pattern, replacement in self.SENSITIVE_PATTERNS:
+                                safe_arg = pattern.sub(replacement, safe_arg)
+                            safe_args.append(safe_arg)
+                        else:
+                            safe_args.append(arg)
+                    record.args = tuple(safe_args)
+                except TypeError:
+                    # Non-iterable args, leave as-is
+                    pass
 
         return True
 
