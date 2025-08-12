@@ -1,0 +1,16 @@
+---
+description: 
+globs: **/*.yaml,**/*.yml
+alwaysApply: false
+---
+# YAML Standards & Prompt Engineering
+
+### 1. YAML Formatting (Critical)
+- **Document Start**: All YAML files **MUST** begin with the document start indicator `---` on the first line. This is a `yamllint` requirement in our project.
+- **Indentation**: Use 2 spaces for indentation.
+- **Clarity**: Keep the structure clean and readable.
+
+### 2. Prompt Structure
+- When editing prompt files, maintain a clear, structured format.
+- Use comments (`#`) to explain the purpose of different parts of the prompt.
+- Use YAML anchors and aliases to avoid repetition where applicable.

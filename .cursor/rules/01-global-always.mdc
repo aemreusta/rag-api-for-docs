@@ -1,0 +1,9 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+- **Python Version**: All Python code MUST be compatible with Python 3.10 or newer.
+- **Clarity and Simplicity**: Write code that is clear, simple, and easy to understand. Favor readability over overly clever constructs.
+- **No Secrets**: Never hardcode secrets like API keys or passwords. Use the patterns in `backend/app/core/config.py` to manage configuration.
+- **Dependencies**: When adding new dependencies, state them clearly so they can be added to the `requirements.in` files and compiled using `pip-tools`.

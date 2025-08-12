@@ -1,0 +1,25 @@
+---
+description: 
+globs: app/**/*.py
+alwaysApply: false
+---
+# Backend Architecture & Best Practices
+
+Adherence to our layered architecture and best practices is mandatory.
+
+### 1. Architectural Pattern
+- **API Layer (`api/`)**: Handles HTTP logic only. Calls the Core/Service layer. Use Pydantic schemas from `schemas` for `response_model`.
+- **Core Layer (`core/`)**: Contains business logic including query engine and configuration management. Orchestrates database interactions and external services.
+- **Database Layer (`db/`)**: Handles direct database interactions via SQLAlchemy. Contains ORM models and database utilities.
+- **Schema Layer (`schemas/`)**: Pydantic models for API request/response validation and serialization.
+
+### 2. FastAPI
+- **Async Endpoints**: All API endpoints must be `async def`.
+- **Dependency Injection**: Always use `Depends()` to get dependencies like database sessions.
+- **Pydantic Schemas**: Schemas in `schemas/` are the single source of truth for API shapes. Use them for request bodies and `response_model`.
+- **Error Handling**: Use proper HTTP status codes and structured error responses.
+
+### 3. Database Integration
+- **Session Management**: Database sessions should be properly managed and closed.
+- **Query Patterns**: Use appropriate query patterns for vector similarity search and content retrieval.
+- **Model Relationships**: Properly define relationships between models when needed.

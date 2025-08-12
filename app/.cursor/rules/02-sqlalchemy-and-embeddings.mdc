@@ -1,0 +1,23 @@
+---
+description: 
+globs: app/**/*.py
+alwaysApply: false
+---
+# SQLAlchemy & Embeddings Rules
+
+### 1. Database Operations
+- **Model Definitions**: When defining ORM models in `db/models.py`, use `Mapped` and `mapped_column` for fully type-hinted models.
+- **Session Management**: Database sessions should be injected as dependencies and properly managed.
+- **Querying**: Use SQLAlchemy 2.0 `select()` syntax for all queries. Do not use raw SQL unless absolutely necessary.
+- **Alembic Migrations**: If you change an ORM model, state that a new Alembic migration script must be generated.
+
+### 2. Embeddings & Vector Search
+- **Vector Operations**: When working with embeddings, ensure proper handling of vector similarity search.
+- **Content Processing**: Maintain consistency in how text content is processed and embedded.
+- **Query Engine**: The `core/query_engine.py` should handle the orchestration of embedding generation and similarity search.
+- **Performance**: Consider pagination and limits for large result sets from vector searches.
+
+### 3. Content Management
+- **Content Storage**: Ensure content embeddings are properly stored with metadata.
+- **Chunk Management**: Handle text chunking consistently for optimal embedding performance.
+- **Retrieval Patterns**: Implement efficient retrieval patterns for relevant content based on user queries.

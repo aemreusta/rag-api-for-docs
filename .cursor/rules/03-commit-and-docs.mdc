@@ -1,0 +1,14 @@
+---
+description: Rules for generating Conventional Commits and maintaining documentation.
+globs: 
+alwaysApply: false
+---
+### Conventional Commits
+When asked for a commit message, you MUST use the **Conventional Commits** specification.
+- Format: `<type>(<scope>): <subject>`
+- Example: `feat(api): add endpoint for chat query processing`
+- Scope should be a specific part of the app, e.g., `api`, `core`, `db`, `schemas`, `scripts`.
+
+### Documentation
+- If you change a significant piece of logic, suggest updating the relevant documentation in the `docs/` directory.
+- For architectural changes, mention that a Mermaid diagram (`.mmd`) in `docs/diagrams/` may need to be updated.
