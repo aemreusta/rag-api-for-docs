@@ -52,15 +52,19 @@ chat_engine = CondenseQuestionChatEngine.from_defaults(
 )
 
 
-def _cache_key_for_chat_response(question: str, session_id: str) -> str:
-    """Generate cache key for chat responses using the LLM model name."""
-    return cache_key_for_chat(
-        question,
-        session_id,
-        llm_router._available_providers[0].get_model_name()
-        if llm_router._available_providers
-        else "",
-    )
+def _cache_key_for_chat_response(question: str, session_id: str, model: str | None = None) -> str:
+    """Generate cache key for chat responses using the LLM model name.
+
+    Accepts an optional model parameter to match the wrapped function signature.
+    """
+    effective_model = model
+    if not effective_model:
+        effective_model = (
+            llm_router._available_providers[0].get_model_name()
+            if llm_router._available_providers
+            else ""
+        )
+    return cache_key_for_chat(question, session_id, effective_model)
 
 
 @vector_metrics.time_vector_search
@@ -98,10 +102,19 @@ def get_chat_response(question: str, session_id: str, model: str | None = None) 
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
-        # Create a dedicated loop for this call if none exists
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # No running loop in this thread; safe to run directly
+        return asyncio.run(get_chat_response_async(question, session_id, model))
 
-    # Important: do NOT close the loop here; other async components may
-    # still rely on it within the same request lifecycle.
+    # If an event loop is already running (e.g., within an async web handler),
+    # execute the coroutine in a fresh event loop on a worker thread.
+    if loop.is_running():
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                asyncio.run, get_chat_response_async(question, session_id, model)
+            )
+            return future.result()
+
+    # Otherwise, run it synchronously on this thread's event loop
     return loop.run_until_complete(get_chat_response_async(question, session_id, model))

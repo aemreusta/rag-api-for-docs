@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from app.api.deps import rate_limit
 from app.core.config import settings
 from app.core.logging_config import get_logger, get_trace_id
-from app.core.query_engine import get_chat_response, get_chat_response_async, llm_router
+from app.core.query_engine import get_chat_response_async, llm_router
 from app.schemas.chat import ChatRequest, ChatResponse, SourceNode
 
 
@@ -44,10 +44,8 @@ langfuse_client = langfuse.Langfuse(
 
 async def _call_rag_engine(question: str, session_id: str, model: str | None):
     """Call RAG engine preferring async path with sync fallback."""
-    try:
-        return await get_chat_response_async(question, session_id, model)
-    except Exception:
-        return get_chat_response(question, session_id, model)
+    # Always call the async path; the sync wrapper can cause event loop conflicts
+    return await get_chat_response_async(question, session_id, model)
 
 
 def _extract_answer_and_sources(rag_response) -> tuple[str, list[SourceNode]]:
@@ -182,6 +180,16 @@ async def handle_chat(request: ChatRequest, _rl: None = Depends(rate_limit)):
             trace_id=trace_id,
             exc_info=True,
         )
+
+        # Attempt a best-effort direct LLM fallback before returning error
+        try:
+            llm_text = await _llm_direct_answer(request.question, request.model)
+            if llm_text and llm_text.strip():
+                response = ChatResponse(answer=llm_text, sources=[])
+                generation.end(output=response.model_dump())
+                return response
+        except Exception:
+            pass
 
         generation.end(level="ERROR", status_message=str(e))
         # Preserve existing test expectations: return 500 with friendly message
