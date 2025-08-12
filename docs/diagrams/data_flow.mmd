@@ -26,7 +26,7 @@ graph TD
     A --"2. Rate Limit Check"--> D;
     A --"3. Generate<br/>Correlation IDs"--> G;
     A --"4. Query"--> B;
-        B --"5. Retrieve Context (HNSW @ VECTOR(3072))"--> C;
+        B --"5. Retrieve Context (HNSW @ VECTOR(1536))"--> C;
         B --"6. Prompt + Context"--> I;
     I --"7. Check Provider Status"--> J;
     

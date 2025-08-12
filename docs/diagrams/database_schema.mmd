@@ -2,7 +2,7 @@ graph TD
     subgraph "PostgreSQL Container"
         direction LR
         subgraph "Application DB ('app')"
-            T1[content_embeddings<br/>- id: INTEGER PK<br/>- source_document: VARCHAR(255)<br/>- page_number: INTEGER<br/>- content_text: TEXT<br/>- content_vector: VECTOR(3072)<br/>- Index: HNSW (m=32, ef_construction=64)]
+            T1[content_embeddings<br/>- id: INTEGER PK<br/>- source_document: VARCHAR(255)<br/>- page_number: INTEGER<br/>- content_text: TEXT<br/>- content_vector: VECTOR(1536)<br/>- Index: HNSW (m=32, ef_construction=64)]
             T3[alembic_version<br/>- version_num: VARCHAR(32) PK]
         end
 
