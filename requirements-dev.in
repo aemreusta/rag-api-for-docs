@@ -16,6 +16,7 @@ pyupgrade
 nbqa
 codespell
 yamllint
+bandit
 commitizen
 
 # Interactive tools

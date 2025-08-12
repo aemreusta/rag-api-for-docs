@@ -86,7 +86,7 @@ Browser → WP Script ↔ ai-gateway ↔ RAG API ↔ LLMs
 | LLM Observability | Langfuse v3 | Purpose-built platform for tracing, debugging, evaluating, and monitoring LLM applications |
 | **Metrics & Monitoring** | **Prometheus/DataDog/OpenTelemetry** | **Flexible multi-backend observability (auto-detection)** |
 | OLAP Database | ClickHouse 24.3 | High-performance analytical database for Langfuse metrics and analytics |
-| Language | Python 3.10+ | Modern Python with full type hints and async support |
+| Language | Python 3.11 | Modern Python with full type hints and async support |
 | In-Memory Datastore | Redis 7 | High-speed key-value store for session management, caching, and rate limiting |
 | Frontend Integration | WordPress | Chat widget integration for public website |
 | Containerization | Docker | Consistent deployment with Docker Compose for local development |
