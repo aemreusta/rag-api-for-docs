@@ -1,0 +1,18 @@
+# Core runtime dependencies (fast to install)
+fastapi
+uvicorn
+python-dotenv
+langfuse
+psycopg2-binary
+pgvector
+pydantic
+pydantic-settings
+redis
+async-timeout
+structlog
+python-json-logger
+prometheus_client
+uv
+python-multipart
+alembic
+

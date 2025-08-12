@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.6
-FROM python:3.11-slim
+FROM python:3.11-slim AS base
 
 WORKDIR /app
 
@@ -16,11 +16,14 @@ RUN --mount=type=cache,target=/var/cache/apt \
 # Install uv package manager
 RUN pip install --upgrade pip uv
 
-# Copy *both* lock-files before install to keep the cache
-COPY requirements-dev.txt ./
+FROM base AS deps-core
+COPY requirements-core.in requirements-core.in
+RUN --mount=type=cache,target=/root/.cache \
+    uv pip compile requirements-core.in -o requirements-core.txt && \
+    uv pip sync --system requirements-core.txt
 
-# Use uv to install dependencies from the requirements-dev.txt file into system interpreter,
-# caching wheels and artifacts to speed up subsequent builds
+FROM base AS deps-dev
+COPY requirements-dev.txt ./
 RUN --mount=type=cache,target=/root/.cache \
     uv pip sync --system requirements-dev.txt
 

@@ -29,6 +29,7 @@ services:
         cache-to:
           - type=inline
     image: chatbot-api-service-app:dev
+    target: deps-dev
     <<: *default-env
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports: ["18000:8000"]
