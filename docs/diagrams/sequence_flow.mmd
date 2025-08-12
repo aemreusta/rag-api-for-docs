@@ -15,7 +15,7 @@ sequenceDiagram
     Backend->>LlamaIndex Engine: 2. query(question)
     LlamaIndex Engine->>Langfuse: Log Retrieval Step
     
-    LlamaIndex Engine->>LLM Router: 3. Request completion
+    LlamaIndex Engine->>LLM Router: 3. Request completion (embeddings: Gemini 3072-d)
     LLM Router->>LLM Router: Check provider availability
     
     alt Primary Provider Available

@@ -29,9 +29,12 @@
   - Optional: `model` (e.g., `gemini-2.0-flash`, `llama3-70b-8192`, `gpt-4o`)
   - Optional: `stream` (true/false). When true, response is `text/plain` streamed chunks
   - Preset requests included: "Chat (Streaming)", "Chat (With Model)"
+  - Negative case included: "Chat (RAG_EMPTY negative case)" → expect 200 fallback or 502 with `{ code: "RAG_EMPTY", ... }`
 
 Other:
 
 - Metrics: `GET {{base_url}}/metrics`
 
 Tip: If you run via Docker, ensure the backend is mapped to host port 18000 and reachable from your machine.
+
+Compose naming: resources are prefixed via `name: chatbot-api-service` in `docker-compose.yml`. You can also export `COMPOSE_PROJECT_NAME=chatbot-api-service` for CLI consistency.

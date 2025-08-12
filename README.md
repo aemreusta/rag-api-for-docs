@@ -81,7 +81,7 @@ Browser → WP Script ↔ ai-gateway ↔ RAG API ↔ LLMs
 |-----------|------------|-------------------|
 | Backend Framework | FastAPI | High-performance Python framework with automatic API documentation and data validation |
 | LLM App Framework | LlamaIndex | Specialized data-centric framework providing SOTA components for ingestion, indexing, and advanced retrieval |
-| Vector Database | **PostgreSQL w/ pgvector + HNSW** | **High-performance vector similarity search with P99 <2ms latency** |
+| Vector Database | **PostgreSQL w/ pgvector + HNSW** | **High-performance vector similarity search with P99 <2ms latency (VECTOR(3072))** |
 | AI Gateway | Go | High-performance proxy for load balancing across multiple LLM providers |
 | LLM Observability | Langfuse v3 | Purpose-built platform for tracing, debugging, evaluating, and monitoring LLM applications |
 | **Metrics & Monitoring** | **Prometheus/DataDog/OpenTelemetry** | **Flexible multi-backend observability (auto-detection)** |
@@ -181,7 +181,7 @@ ai-gateway/
 │   │   ├── ratelimit.py         # Redis-based rate limiting
 │   │   └── redis.py             # Redis connection management
 │   ├── db/                      # Database models
-│   │   └── models.py            # SQLAlchemy models with VECTOR(1536)
+│   │   └── models.py            # SQLAlchemy models with VECTOR(3072)
 │   ├── schemas/                 # Pydantic models
 │   └── main.py                  # Application entry point
 │
@@ -380,7 +380,7 @@ Select and configure the embedding provider via environment:
 
 - `EMBEDDING_PROVIDER`: `hf` | `openai` | `google` (default: `google`)
 - `EMBEDDING_MODEL_NAME`: provider-specific model id (default: `gemini-embedding-001`)
-- `EMBEDDING_DIM`: vector dimension (must match DB schema and index; MRL dims `3072|1536|768`, default `1536`)
+- `EMBEDDING_DIM`: vector dimension (must match DB schema and index; MRL dims `3072|1536|768`, default `3072`)
 
 Examples:
 
@@ -388,7 +388,7 @@ Examples:
 # Gemini (default)
 EMBEDDING_PROVIDER=google
 EMBEDDING_MODEL_NAME=gemini-embedding-001
-EMBEDDING_DIM=1536
+EMBEDDING_DIM=3072
 
 # OpenAI
 EMBEDDING_PROVIDER=openai

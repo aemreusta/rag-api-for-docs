@@ -1,4 +1,5 @@
 ---
+name: chatbot-api-service
 x-env: &default-env          # centralise .env declarations
   env_file:
     - .env
@@ -15,6 +16,8 @@ volumes:
   minio_data:
 
 services:
+  # Compose project name prefix for clearer resource names
+  # Note: also export COMPOSE_PROJECT_NAME=chatbot-api-service in your shell for CLI consistency
   # ─────────────────────────── Core FastAPI stack ───────────────────────────
   app:
     build:

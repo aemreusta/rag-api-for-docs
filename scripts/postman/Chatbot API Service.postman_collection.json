@@ -148,6 +148,42 @@
       }
     },
     {
+      "name": "Chat (RAG_EMPTY negative case)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"qwertyuiopasdfghjkzxcvbnm 1234567890 — unlikely to match docs\",\n  \"session_id\": \"{{session_id}}\",\n  \"stream\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/chat",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "chat"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Expect 200 or 502 with RAG_EMPTY', function () {",
+              "  const sc = pm.response.code;",
+              "  pm.expect([200, 502]).to.include(sc);",
+              "  if (sc === 502) {",
+              "    const body = pm.response.json();",
+              "    pm.expect(body.code).to.eql('RAG_EMPTY');",
+              "  }",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "Chat (Streaming)",
       "request": {
         "method": "POST",
