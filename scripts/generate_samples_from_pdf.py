@@ -20,6 +20,9 @@ import sys
 from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.pdfgen import canvas
 
 
 def ensure_dir(path: Path) -> None:
@@ -61,6 +64,29 @@ def extract_text_all(reader: PdfReader) -> str:
     return "\n\n".join(texts).strip()
 
 
+def write_generation_notice(out_dir: Path, stem: str) -> None:
+    notice = (
+        "This file is generated for tests and may contain Turkish words that codespell flags.\n"
+        "It is intentionally excluded via pre-commit configuration.\n"
+    )
+    (out_dir / f"{stem}_README.txt").write_text(notice, encoding="utf-8")
+
+
+def write_cover_page(out_dir: Path, stem: str, source_pdf: Path, total_pages: int) -> None:
+    cover_path = out_dir / f"{stem}_cover.pdf"
+    c = canvas.Canvas(str(cover_path), pagesize=A4)
+    c.setFont("Helvetica", 14)
+    text = c.beginText(2 * cm, 27 * cm)
+    text.textLine("Generated Samples")
+    text.textLine("")
+    text.textLine(f"Source: {source_pdf.name}")
+    text.textLine(f"Pages: {total_pages}")
+    text.textLine("Note: Generated for tests; excluded from codespell.")
+    c.drawText(text)
+    c.showPage()
+    c.save()
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         print("Usage: python scripts/generate_samples_from_pdf.py <source_pdf_path>")
@@ -99,6 +125,10 @@ def main() -> None:
     # 5) Excerpt text (first 3 pages)
     excerpt_text = extract_text_pages(reader, [0, 1, 2])
     (out_dir / f"{stem}_excerpt_pages1-3.txt").write_text(excerpt_text, encoding="utf-8")
+
+    # 6) Add a small README and a cover page PDF to clarify generation context
+    write_generation_notice(out_dir, stem)
+    write_cover_page(out_dir, stem, source_pdf, total_pages)
 
     print("=== Sample generation complete ===")
     print(f"Source: {source_pdf}")
