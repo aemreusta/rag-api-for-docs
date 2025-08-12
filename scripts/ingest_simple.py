@@ -132,23 +132,20 @@ def main():
 
     # Convert documents to nodes
     nodes = node_parser.get_nodes_from_documents(documents)
-    # Sanitize and drop empty/near-empty chunks to avoid provider errors
+    # Prepare (node, sanitized_text) pairs and drop empties to avoid provider errors
+    node_text_pairs = []
     for n in nodes:
-        content = _sanitize_text(n.get_content() or "")
-        n.text = content  # ensure node content is sanitized in-place
-    nodes = [n for n in nodes if n.get_content() and len(n.get_content()) >= 3]
-    if not nodes:
+        text = _sanitize_text(n.get_content() or "")
+        if text and len(text) >= 3:
+            node_text_pairs.append((n, text))
+    if not node_text_pairs:
         logger.warning("No non-empty chunks found after parsing. Nothing to ingest.")
         return
     # Compute embeddings using the configured ingestion embed model
     embedder = LlamaSettings.embed_model
-    texts = [_sanitize_text(n.get_content() or "") for n in nodes]
-    texts = [t for t in texts if t and len(t) >= 3]
-    if not texts:
-        logger.warning("No non-empty texts to embed. Skipping embedding step.")
-        return
+    texts = [t for _, t in node_text_pairs]
     embeddings = embedder.get_text_embedding_batch(texts)
-    for n, e in zip(nodes, embeddings, strict=False):
+    for (n, _), e in zip(node_text_pairs, embeddings, strict=True):
         n.embedding = e
     # Add to vector store directly
     vector_store.add(nodes)
