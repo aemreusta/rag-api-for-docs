@@ -268,3 +268,32 @@ services:
     depends_on:
       app: {condition: service_started}
     networks: [app-network]
+
+  # ───────────────────────────── Celery background workers ──────────────────────────────
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    <<: *default-env
+    command: bash -lc "bash scripts/celery_worker.sh"
+    volumes:
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - ./pdf_documents:/app/pdf_documents
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    networks: [app-network]
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    <<: *default-env
+    command: bash -lc "bash scripts/celery_beat.sh"
+    volumes:
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+    depends_on:
+      redis: {condition: service_healthy}
+    networks: [app-network]

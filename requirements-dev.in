@@ -27,3 +27,5 @@ streamlit
 streamlit-chat
 python-multipart
 pypdf
+redis
+celery
