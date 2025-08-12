@@ -144,6 +144,17 @@ def main():
     # Compute embeddings using the configured ingestion embed model
     embedder = LlamaSettings.embed_model
     texts = [t for _, t in node_text_pairs]
+    # Final safety: drop any residual empties
+    bad_idx = [i for i, t in enumerate(texts) if not t or not t.strip()]
+    if bad_idx:
+        logger.warning(
+            f"Dropping {len(bad_idx)} empty chunks before embedding: idx={bad_idx[:5]}..."
+        )
+        texts = [t for i, t in enumerate(texts) if i not in bad_idx]
+        node_text_pairs = [p for i, p in enumerate(node_text_pairs) if i not in bad_idx]
+        if not texts:
+            logger.warning("No embeddable text remains after filtering. Exiting.")
+            return
     embeddings = embedder.get_text_embedding_batch(texts)
     for (n, _), e in zip(node_text_pairs, embeddings, strict=True):
         n.embedding = e
