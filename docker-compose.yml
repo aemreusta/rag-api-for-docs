@@ -275,10 +275,9 @@ services:
       context: .
       dockerfile: Dockerfile
     <<: *default-env
-    command: bash -lc "bash scripts/celery_worker.sh"
+    command: celery -A app.core.jobs.celery_app worker --loglevel=INFO --hostname=worker@%h
     volumes:
       - ./app:/app/app
-      - ./scripts:/app/scripts
       - ./pdf_documents:/app/pdf_documents
     depends_on:
       postgres: {condition: service_healthy}
@@ -290,10 +289,9 @@ services:
       context: .
       dockerfile: Dockerfile
     <<: *default-env
-    command: bash -lc "bash scripts/celery_beat.sh"
+    command: celery -A app.core.jobs.celery_app beat --loglevel=INFO
     volumes:
       - ./app:/app/app
-      - ./scripts:/app/scripts
     depends_on:
       redis: {condition: service_healthy}
     networks: [app-network]
