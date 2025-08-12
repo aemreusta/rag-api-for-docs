@@ -22,11 +22,11 @@ def upgrade() -> None:
     # 1. Ensure pgvector extension is available (required for VECTOR type and HNSW)
     op.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
-    # 2. Convert content_vector from TEXT to VECTOR(384)
+    # 2. Convert content_vector from TEXT to VECTOR(1536) to align with Gemini embeddings
     # Since DB is empty (development), we can do direct ALTER TYPE
     op.execute("""
         ALTER TABLE content_embeddings
-        ALTER COLUMN content_vector TYPE VECTOR(384)
+        ALTER COLUMN content_vector TYPE VECTOR(1536)
         USING CASE
             WHEN content_vector IS NULL THEN NULL
             ELSE content_vector::vector

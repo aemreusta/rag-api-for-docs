@@ -45,6 +45,8 @@ backoff==2.2.1
     # via
     #   langfuse
     #   unstructured
+bandit==1.8.6
+    # via -r requirements-dev.in
 banks==2.1.3
     # via llama-index-core
 beautifulsoup4==4.13.4
@@ -146,16 +148,45 @@ gitdb==4.0.12
     # via gitpython
 gitpython==3.1.44
     # via streamlit
+google-ai-generativelanguage==0.6.4
+    # via google-generativeai
+google-api-core==2.25.1
+    # via
+    #   google-ai-generativelanguage
+    #   google-api-python-client
+    #   google-generativeai
+google-api-python-client==2.178.0
+    # via google-generativeai
 google-auth==2.40.3
-    # via google-genai
+    # via
+    #   google-ai-generativelanguage
+    #   google-api-core
+    #   google-api-python-client
+    #   google-auth-httplib2
+    #   google-genai
+    #   google-generativeai
+google-auth-httplib2==0.2.0
+    # via google-api-python-client
 google-genai==1.29.0
     # via llama-index-llms-google-genai
+google-generativeai==0.5.4
+    # via llama-index-embeddings-google
+googleapis-common-protos==1.70.0
+    # via
+    #   google-api-core
+    #   grpcio-status
 greenlet==3.2.3
     # via sqlalchemy
 griffe==1.7.3
     # via banks
 groq==0.29.0
     # via -r requirements.in
+grpcio==1.74.0
+    # via
+    #   google-api-core
+    #   grpcio-status
+grpcio-status==1.62.3
+    # via google-api-core
 h11==0.16.0
     # via
     #   httpcore
@@ -168,6 +199,10 @@ html5lib==1.1
     # via unstructured
 httpcore==1.0.9
     # via httpx
+httplib2==0.22.0
+    # via
+    #   google-api-python-client
+    #   google-auth-httplib2
 httpx==0.28.1
     # via
     #   google-genai
@@ -251,6 +286,7 @@ llama-index-core==0.12.44
     #   llama-index-agent-openai
     #   llama-index-callbacks-langfuse
     #   llama-index-cli
+    #   llama-index-embeddings-google
     #   llama-index-embeddings-huggingface
     #   llama-index-embeddings-openai
     #   llama-index-indices-managed-llama-cloud
@@ -264,6 +300,8 @@ llama-index-core==0.12.44
     #   llama-index-readers-file
     #   llama-index-readers-llama-parse
     #   llama-index-vector-stores-postgres
+llama-index-embeddings-google==0.3.1
+    # via -r requirements.in
 llama-index-embeddings-huggingface==0.5.5
     # via -r requirements.in
 llama-index-embeddings-openai==0.3.1
@@ -312,6 +350,8 @@ lxml==6.0.0
     # via unstructured
 mako==1.3.10
     # via alembic
+markdown-it-py==4.0.0
+    # via rich
 markupsafe==3.0.2
     # via
     #   jinja2
@@ -320,6 +360,8 @@ marshmallow==3.26.1
     # via dataclasses-json
 matplotlib-inline==0.1.7
     # via ipython
+mdurl==0.1.2
+    # via markdown-it-py
 mpmath==1.3.0
     # via sympy
 multidict==6.6.0
@@ -383,6 +425,8 @@ parso==0.8.4
     # via jedi
 pathspec==0.12.1
     # via yamllint
+pbr==6.1.1
+    # via stevedore
 pexpect==4.9.0
     # via ipython
 pgvector==0.4.1
@@ -417,8 +461,19 @@ propcache==0.3.2
     # via
     #   aiohttp
     #   yarl
-protobuf==5.29.5
-    # via streamlit
+proto-plus==1.26.1
+    # via
+    #   google-ai-generativelanguage
+    #   google-api-core
+protobuf==4.25.8
+    # via
+    #   google-ai-generativelanguage
+    #   google-api-core
+    #   google-generativeai
+    #   googleapis-common-protos
+    #   grpcio-status
+    #   proto-plus
+    #   streamlit
 psutil==7.0.0
     # via unstructured
 psycopg2-binary==2.9.10
@@ -447,6 +502,7 @@ pydantic==2.11.7
     #   banks
     #   fastapi
     #   google-genai
+    #   google-generativeai
     #   groq
     #   langfuse
     #   llama-cloud
@@ -468,6 +524,9 @@ pygments==2.19.2
     #   ipython
     #   ipython-pygments-lexers
     #   pytest
+    #   rich
+pyparsing==3.2.3
+    # via httplib2
 pypdf==5.6.1
     # via
     #   llama-index-readers-file
@@ -505,6 +564,7 @@ pyupgrade==3.20.0
     # via -r requirements-dev.in
 pyyaml==6.0.2
     # via
+    #   bandit
     #   commitizen
     #   huggingface-hub
     #   llama-index-core
@@ -532,6 +592,7 @@ reportlab==4.4.2
     # via -r requirements.in
 requests==2.32.4
     # via
+    #   google-api-core
     #   google-genai
     #   huggingface-hub
     #   langfuse
@@ -543,6 +604,8 @@ requests==2.32.4
     #   unstructured
 requests-toolbelt==1.0.0
     # via unstructured-client
+rich==14.1.0
+    # via bandit
 rpds-py==0.26.0
     # via
     #   jsonschema
@@ -562,7 +625,9 @@ scipy==1.16.0
 sentence-transformers==4.1.0
     # via llama-index-embeddings-huggingface
 setuptools==80.9.0
-    # via llama-index-core
+    # via
+    #   llama-index-core
+    #   pbr
 six==1.17.0
     # via
     #   html5lib
@@ -588,6 +653,8 @@ stack-data==0.6.3
     # via ipython
 starlette==0.46.2
     # via fastapi
+stevedore==5.4.1
+    # via bandit
 streamlit==1.46.1
     # via
     #   -r requirements-dev.in
@@ -629,6 +696,7 @@ tornado==6.5.1
     # via streamlit
 tqdm==4.67.1
     # via
+    #   google-generativeai
     #   huggingface-hub
     #   llama-index-core
     #   nltk
@@ -653,6 +721,7 @@ typing-extensions==4.14.0
     #   beautifulsoup4
     #   fastapi
     #   google-genai
+    #   google-generativeai
     #   groq
     #   huggingface-hub
     #   ipython
@@ -683,6 +752,8 @@ unstructured==0.18.1
     # via -r requirements.in
 unstructured-client==0.37.2
     # via unstructured
+uritemplate==4.2.0
+    # via google-api-python-client
 urllib3==2.5.0
     # via requests
 uv==0.7.20

@@ -34,7 +34,8 @@ vector_store = PGVectorStore.from_params(
     port=5432,
     user=settings.POSTGRES_USER,
     table_name="content_embeddings",
-    embed_dim=settings.EMBEDDING_DIM,  # Use configurable dimension from settings (default 384)
+    # Embedding dimension is configurable via settings
+    embed_dim=settings.EMBEDDING_DIM,
 )
 index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
 

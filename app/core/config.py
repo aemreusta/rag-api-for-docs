@@ -47,11 +47,11 @@ class Settings(BaseSettings):
 
     # Vector Embeddings Settings
     # Options: hf | openai | google
-    EMBEDDING_PROVIDER: str = "hf"
-    # Default to HF MiniLM for local dev; matches 384-dim DB migration
-    EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
-    # Keep default 384 to match current DB schema; override via env when migrating
-    EMBEDDING_DIM: int = 384
+    EMBEDDING_PROVIDER: str = "google"
+    # Default Gemini embedding model
+    EMBEDDING_MODEL_NAME: str = "gemini-embedding-001"
+    # Default dimension aligned to Gemini MRL mid-dim
+    EMBEDDING_DIM: int = 1536
 
     # Metrics & Monitoring Settings
     METRICS_BACKEND: str = "auto"  # auto, prometheus, datadog, opentelemetry, noop

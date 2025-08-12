@@ -4,6 +4,7 @@ python-dotenv
 langfuse
 llama-index
 llama-index-llms-google-genai
+llama-index-embeddings-google
 llama-index-llms-openrouter
 llama-index-llms-openai
 groq
