@@ -567,6 +567,12 @@ class VectorSearchMetrics:
         """Generic counter increment with value."""
         self.backend.increment(name, labels, value)
 
+    def record_histogram(
+        self, name: str, value: float, labels: dict[str, str] | None = None
+    ) -> None:
+        """Generic histogram/timing recorder passthrough."""
+        self.backend.record_histogram(name, value, labels)
+
 
 # Create a default instance for backward compatibility
 vector_metrics = VectorSearchMetrics()
