@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db_session
 from app.core.dedup import ContentDeduplicator, compute_sha256_hex
 from app.core.incremental import ChangeSet, IncrementalProcessor
-from app.core.jobs import process_document_async
+from app.core.jobs import celery_app, process_document_async
 from app.core.logging_config import get_logger
 from app.core.metrics import get_metrics_backend
 from app.core.quality import QualityAssurance
@@ -237,3 +237,42 @@ async def apply_changes(payload: ApplyChangesRequest, db: Session = DB_DEP) -> A
     except Exception:
         version = None
     return ApplyChangesResponse(updated_pages=payload.changes.changed_pages, version=version)
+
+
+# ----------------------------
+# Jobs status endpoint
+# ----------------------------
+
+
+class JobStatusResponse(BaseModel):
+    id: str
+    status: Literal["pending", "processing", "completed", "failed", "retry"]
+    detail: dict | None = None
+
+
+@router.get("/jobs/{job_id}", response_model=JobStatusResponse)
+async def get_job_status(job_id: str) -> JobStatusResponse:
+    """Map Celery job states to API status semantics."""
+    try:
+        res = celery_app.AsyncResult(job_id)
+        state = (res.state or "PENDING").upper()
+        if state in {"PENDING"}:
+            status = "pending"
+        elif state in {"RECEIVED", "STARTED"}:
+            status = "processing"
+        elif state in {"RETRY"}:
+            status = "retry"
+        elif state in {"FAILURE"}:
+            status = "failed"
+        else:  # SUCCESS or others
+            status = "completed"
+        detail = None
+        try:
+            info = res.info  # type: ignore[attr-defined]
+            if isinstance(info, dict):
+                detail = info
+        except Exception:
+            detail = None
+        return JobStatusResponse(id=job_id, status=status, detail=detail)
+    except Exception:
+        return JobStatusResponse(id=job_id, status="pending", detail=None)
