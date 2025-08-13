@@ -100,6 +100,27 @@ class PrometheusBackend(MetricsBackend):
             registry,
         )
 
+        # Ingestion metrics (basic)
+        self.ingest_requests = self._create_metric_safe(
+            lambda: Counter(
+                "ingest_requests_total",
+                "Total number of document ingest requests",
+                labelnames=["status"],
+            ),
+            "ingest_requests_total",
+            registry,
+        )
+        self.ingest_latency = self._create_metric_safe(
+            lambda: Histogram(
+                "ingest_latency_seconds",
+                "Time spent validating/enqueuing document ingest",
+                labelnames=["status"],
+                buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+            ),
+            "ingest_latency_seconds",
+            registry,
+        )
+
     def _create_cache_metrics(self, Counter, registry):
         """Create cache metrics."""
         self.cache_hits = self._create_metric_safe(
@@ -167,6 +188,12 @@ class PrometheusBackend(MetricsBackend):
         ):
             label_values = labels or {}
             self.vector_search_duration.labels(**label_values).observe(value)
+        elif (
+            name == "ingest_latency_seconds"
+            and hasattr(self, "ingest_latency")
+            and self.ingest_latency is not None
+        ):
+            self.ingest_latency.labels(**(labels or {})).observe(value)
 
     def increment_counter(self, name: str, labels: dict[str, str] | None = None) -> None:
         if not self._metrics_available:
@@ -180,6 +207,12 @@ class PrometheusBackend(MetricsBackend):
             and self.vector_search_requests is not None
         ):
             self.vector_search_requests.labels(**label_values).inc()
+        elif (
+            name == "ingest_requests_total"
+            and hasattr(self, "ingest_requests")
+            and self.ingest_requests is not None
+        ):
+            self.ingest_requests.labels(**label_values).inc()
         elif (
             name == "cache_hits_total"
             and hasattr(self, "cache_hits")
