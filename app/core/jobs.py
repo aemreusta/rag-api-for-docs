@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.core.dedup import ContentDeduplicator
 from app.core.incremental import IncrementalProcessor
 from app.core.ingestion import NLTKAdaptiveChunker
-from app.core.logging_config import get_logger, setup_logging
+from app.core.logging_config import get_logger, set_request_id, set_trace_id, setup_logging
 from app.core.metadata import ChunkMetadataExtractor
 from app.db.models import Document
 
@@ -60,6 +60,10 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
 
     Minimal v1: chunk via ingestion engine, dedup/update chunks, embed via IncrementalProcessor.
     """
+    # Initialize correlation IDs for worker task context
+    set_request_id()
+    set_trace_id(job_id)
+
     logger.info(
         "process_document_async invoked",
         extra={"job_id": job_id, "payload_keys": list(document_data.keys())},
