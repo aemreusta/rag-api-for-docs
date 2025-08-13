@@ -1,11 +1,22 @@
 ---
-description: 
-globs: 
+description: Project-wide standards that always apply in Chat and Inline Edit. Enforce security, clarity, and consistency across the repository.
+globs: **/*
 alwaysApply: true
 ---
+# Global Rules
+
 - **Respect Tooling**: Follow repository tooling as the single source of truth.
 - **Python Version**: Target Python 3.11+ (per `pyproject.toml`).
 - **Clarity and Simplicity**: Write code that is clear, simple, and easy to understand. Favor readability over overly clever constructs.
 - **No Secrets**: Never hardcode secrets like API keys or passwords. Use the patterns in `app/core/config.py` to manage configuration.
 - **Dependencies**: When adding new dependencies, state them clearly so they can be added to `requirements-dev.in` and compiled using `pip-tools` into `requirements-dev.txt` (respect `requirements.in` as the base constraint file).
 - **Style Consistency**: Do not introduce styles that conflict with `pyproject.toml`.
+- **Security**: Validate and sanitize all external inputs. Use least-privilege credentials. Never log secrets or PII. Prefer environment/config patterns in `app/core/config.py`.
+- **Observability**: Use structured logging via `app/core/logging_config.py`. Prefer metrics hooks in `app/core/metrics.py` when adding new long-running or network-bound operations.
+- **Error Handling**: Fail fast with actionable messages. Prefer explicit exception types and avoid bare `except:`.
+- **Testing Mindset**: When changing behavior, consider adding/updating tests under `tests/` and keep them fast and deterministic.
+
+@pyproject.toml
+@app/core/config.py
+@app/core/logging_config.py
+@app/core/metrics.py

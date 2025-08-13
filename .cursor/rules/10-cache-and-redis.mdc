@@ -1,0 +1,15 @@
+---
+description: Redis cache standards. Use centralized client and safe serialization. Avoid key collisions and ensure expirations.
+globs: app/core/redis.py,app/core/cache.py,app/**/*.py
+alwaysApply: false
+---
+# Caching & Redis
+
+- **Client**: Use the Redis client from `app/core/redis.py`. Do not create ad-hoc clients.
+- **Keys**: Use namespaced keys. Avoid collisions; include semantic parts and versions.
+- **Expiry**: Set TTLs for cache entries unless intentionally persistent.
+- **Serialization**: Use safe JSON serialization. Avoid pickling untrusted data.
+- **Observability**: Track hit/miss rates where impactful.
+
+@app/core/cache.py
+@app/core/redis.py

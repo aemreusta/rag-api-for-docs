@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     CORS_ALLOW_CREDENTIALS: bool = False  # Allow credentials (cookies, auth headers)
     CORS_MAX_AGE: int = 600  # Pre-flight cache duration in seconds (10 minutes)
 
+    # Ingestion / Chunking
+    CHUNKER_LANGUAGE: str = "turkish"  # Language for sentence tokenization (NLTK)
+
     @computed_field
     @property
     def cors_origins(self) -> list[str]:

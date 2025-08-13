@@ -1,0 +1,15 @@
+---
+description: Observability standards. Use structured logging and metrics for long-running or network-bound operations.
+globs: app/**/*.py,scripts/**/*.py
+alwaysApply: false
+---
+# Observability & Metrics
+
+- **Structured Logging**: Use the configured logger from `app/core/logging_config.py`.
+- **Context**: Include request IDs, user/context IDs, and operation names in logs when available.
+- **Levels**: Use `debug` for dev detail, `info` for key lifecycle events, `warning` for recoverable issues, `error` for failures.
+- **Metrics**: For I/O, retries, or background jobs, emit counters and histograms using `app/core/metrics.py`.
+- **PII**: Never log secrets or personally identifiable information.
+
+@app/core/logging_config.py
+@app/core/metrics.py

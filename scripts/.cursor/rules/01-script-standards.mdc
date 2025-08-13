@@ -1,5 +1,5 @@
 ---
-description: Script-specific quality rules enforced for files under scripts/
+description: Script-specific quality rules for `scripts/`. Enforce defensive coding, reliability, and strict linting for standalone tools.
 globs: scripts/**/*.py
 alwaysApply: false
 ---
@@ -8,7 +8,7 @@ alwaysApply: false
 The scripts in this directory, especially the ingestion and processing logic, are complex and
 error-prone. You must follow the strictest possible interpretation of our Python Quality rules.
 
-### 1. Defensive Coding (MANDATORY)
+## 1. Defensive Coding (MANDATORY)
 
 - **DEFENSIVE CODING IS MANDATORY**: Every value read from a file, dictionary, or environment
   variable MUST be treated as potentially `None` or the wrong type.
@@ -19,7 +19,7 @@ error-prone. You must follow the strictest possible interpretation of our Python
 - **ARITHMETIC SAFETY**: Before performing any math (`+`, `/`, etc.), ensure both operands are
   numbers and not `None`.
 
-### 2. File and Data Processing
+## 2. File and Data Processing
 
 - **File Operations**: Always check if files exist before processing and handle file operation
   errors gracefully.
@@ -28,7 +28,7 @@ error-prone. You must follow the strictest possible interpretation of our Python
 - **Database Operations**: Ensure database connections are properly managed and operations are
   transactional where appropriate.
 
-### 3. Script Reliability
+## 3. Script Reliability
 
 - **IDEMPOTENCY**: All processing logic should be idempotent. Before creating database records,
   check if they already exist based on unique keys.
@@ -39,10 +39,12 @@ error-prone. You must follow the strictest possible interpretation of our Python
 - **Configuration**: Use environment variables or configuration files for all configurable
   parameters.
 
-### 4. Linting & Formatting (Ruff)
+## 4. Linting & Formatting (Ruff)
 
 - Code MUST pass `ruff check .` using the repo `pyproject.toml`.
 - Format with `ruff format .`.
 - **Line length**: 100 characters (Ruff `E501`). Wrap long calls/arguments and keep
   comments/docstrings within 100 chars.
 - Use double quotes and maintain import order per Ruff (isort via Ruff `I`).
+
+@pyproject.toml

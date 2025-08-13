@@ -1,0 +1,14 @@
+---
+description: Rate limiting standards. Use centralized limiter and expose status endpoints consistently.
+globs: app/core/ratelimit.py,app/api/**/*.py
+alwaysApply: false
+---
+# Rate Limiting
+
+- **Centralized Logic**: Use `app/core/ratelimit.py` helpers. Avoid duplicating token bucket/leaky bucket logic.
+- **Status**: Maintain status endpoint(s) under `app/api/v1/status.py` with consistent schemas.
+- **Headers**: When applicable, include standard rate limit headers.
+- **Observability**: Emit counters for throttled requests.
+
+@app/core/ratelimit.py
+@app/api/v1/status.py

@@ -1,0 +1,16 @@
+---
+description: Pytest standards for `tests/`. Keep tests deterministic, fast, and high-signal.
+globs: tests/**
+alwaysApply: false
+---
+# Testing Standards (Pytest)
+
+- **Deterministic**: Avoid time-based flakiness and sleeps. Prefer dependency injection or time freezing.
+- **Fixtures**: Centralize shared setup in `tests/conftest.py`. Prefer fixtures over global state.
+- **Isolation**: Avoid real network/FS unless explicitly needed. Use `tmp_path`, `monkeypatch`, and fakes.
+- **Structure**: Use Arrange-Act-Assert. Keep tests small and intention-revealing.
+- **Parametrize**: Use `pytest.mark.parametrize` for input matrices.
+- **Async**: Use `pytest.mark.anyio` for async tests.
+- **Coverage**: Focus on `app/core`, `app/api`, ingestion, router, and critical utilities.
+
+@tests/conftest.py

@@ -1,0 +1,17 @@
+---
+description: Alembic migration and database schema standards. Keep models and migrations in sync and use proper pgvector types/indexes.
+globs: alembic/**,app/db/**/*.py
+alwaysApply: false
+---
+# Migrations & DB Schema
+
+- **Model Changes**: Any ORM model change must be accompanied by an Alembic migration.
+- **Autogenerate**: Use Alembic autogenerate and then review/curate the migration scripts.
+- **pgvector**: Ensure correct `vector` types and HNSW/IVFFlat indexes per performance requirements.
+- **Immutable History**: Never rewrite existing migration history. Add a new revision instead.
+- **Naming**: Use descriptive revision messages. Keep upgrade/downgrade symmetrical where possible.
+- **Testing**: Run migrations locally and ensure downgrade/upgrade cycles are valid.
+
+@alembic/env.py
+@alembic/versions/
+@app/db/models.py

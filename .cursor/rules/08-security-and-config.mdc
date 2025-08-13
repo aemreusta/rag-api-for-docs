@@ -1,0 +1,16 @@
+---
+description: Security and configuration standards. Manage secrets via environment and `app/core/config.py`. Validate all external inputs.
+globs: app/**/*.py
+alwaysApply: false
+---
+# Security & Configuration
+
+- **Secrets**: Do not hardcode secrets. Load via environment and configuration patterns under `app/core/config.py`.
+- **Least Privilege**: Scope credentials narrowly. Avoid broad permissions.
+- **Input Validation**: Treat all external inputs as untrusted. Validate and sanitize before use.
+- **No Secret Logging**: Never log secrets, tokens, or PII. Redact sensitive fields.
+- **Safe DB Queries**: Use ORM query APIs. Avoid raw SQL unless necessary and reviewed.
+- **Dependency Health**: When adding dependencies, list them in `requirements/requirements-dev.in` and compile with pip-tools.
+
+@app/core/config.py
+@requirements/requirements-dev.in

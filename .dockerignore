@@ -1,3 +1,47 @@
+# VCS
+.git
+.gitignore
+
+# Python cache/artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.cache/
+
+# Virtual envs
+.venv/
+venv/
+
+# Env and local configs
+.env
+.env.*
+*.log
+
+# Build outputs
+dist/
+build/
+htmlcov/
+.coverage*
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Project folders not needed in runtime image
+tests/
+docs/
+ui/
+pdf_documents/samples/
+scripts/postman/
+
+# Docker/Compose overrides
+docker-compose.override.yml
 # Development files
 .git/
 .github/

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
+from app.core.config import settings
 from app.core.logging_config import get_logger
 
 # ----------------------------
@@ -58,6 +59,85 @@ class AdaptiveChunker(Protocol):
 
     def chunk(self, text: str, *, max_tokens: int = 512, overlap: int = 50) -> list[str]:
         """Return a list of chunk strings."""
+
+
+class NLTKAdaptiveChunker:
+    """Sentence-aware chunker with configurable overlap.
+
+    Uses NLTK's punkt sentence tokenizer to preserve sentence boundaries, then
+    packs sentences into chunks roughly bounded by max_tokens (interpreted as
+    number of words for simplicity). Overlap is applied in words between
+    adjacent chunks to maintain context.
+    """
+
+    def __init__(self, language: str | None = None) -> None:
+        try:
+            import nltk
+
+            # Prefer nltk tokenizer only if resources are present; otherwise fallback
+            has_punkt = False
+            has_punkt_tab = False
+            try:
+                nltk.data.find("tokenizers/punkt")
+                has_punkt = True
+            except LookupError:
+                has_punkt = False
+            try:
+                # Some newer nltk releases require punkt_tab as well
+                lang = language or getattr(settings, "CHUNKER_LANGUAGE", "turkish")
+                nltk.data.find(f"tokenizers/punkt_tab/{lang}/")
+                has_punkt_tab = True
+            except LookupError:
+                has_punkt_tab = False
+
+            if has_punkt and has_punkt_tab:
+                self._sent_tokenize = nltk.sent_tokenize
+            else:
+                # Minimal fallback: naive sentence split on periods
+                self._sent_tokenize = lambda t: [s.strip() for s in t.split(".") if s.strip()]
+        except Exception:  # pragma: no cover - fallback
+            # Minimal fallback: naive sentence split on periods
+            self._sent_tokenize = lambda t: [s.strip() for s in t.split(".") if s.strip()]
+
+    def chunk(self, text: str, *, max_tokens: int = 512, overlap: int = 50) -> list[str]:
+        # Tokenize into sentences with safe fallback
+        try:
+            sentences = self._sent_tokenize(text)
+        except Exception:
+            sentences = [s.strip() for s in text.split(".") if s.strip()]
+        if not sentences:
+            return []
+
+        chunks: list[str] = []
+        current: list[str] = []
+        current_len = 0
+        max_words = max(1, max_tokens)
+        overlap_words = max(0, overlap)
+
+        for sentence in sentences:
+            words = sentence.split()
+            if current_len + len(words) <= max_words:
+                current.append(sentence)
+                current_len += len(words)
+            else:
+                if current:
+                    chunks.append(" ".join(current))
+                    # prepare next buffer with overlap
+                    if overlap_words > 0:
+                        tail_words = " ".join(" ".join(current).split()[-overlap_words:])
+                        current = [tail_words] if tail_words else []
+                        current_len = len(tail_words.split())
+                    else:
+                        current = []
+                        current_len = 0
+                # start new chunk with this sentence
+                current.append(sentence)
+                current_len += len(words)
+
+        if current:
+            chunks.append(" ".join(current))
+
+        return chunks
 
 
 # ----------------------------
@@ -112,13 +192,13 @@ class IngestionEngine:
         self,
         *,
         processors: list[FormatProcessor],
-        chunker: AdaptiveChunker,
+        chunker: AdaptiveChunker | None = None,
         progress_callbacks: list[ProgressCallback] | None = None,
     ) -> None:
         if not processors:
             raise ValueError("At least one FormatProcessor must be provided")
         self._processors = processors
-        self._chunker = chunker
+        self._chunker = chunker or NLTKAdaptiveChunker()
         self._progress_callbacks = progress_callbacks or []
         self._logger = get_logger(__name__)
 

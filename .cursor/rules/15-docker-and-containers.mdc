@@ -1,0 +1,55 @@
+---
+description: Docker and containerization standards. Use multi-stage builds, minimal images, rootless runtime, no secrets in layers, deterministic dependencies, and healthy compose configs.
+globs: Dockerfile,**/Dockerfile,docker-compose*.yml,**/docker-compose*.yml
+alwaysApply: false
+---
+# Docker & Containers
+
+## 1) Dockerfile Best Practices
+
+- **Multi-stage builds**: Separate builder and runtime stages. Keep runtime minimal (e.g., `python:3.11-slim`).
+- **Pin base images**: Use tags and prefer digests for reproducibility.
+- **Rootless runtime**: Create a non-root user and run as that user in the final stage.
+- **Deterministic deps**: Install from compiled requirement files under `requirements/` (use `pip-tools`).
+- **No secrets in layers**: Do not bake API keys/tokens into `RUN`/`ENV`. Inject at runtime.
+- **Build cache**: Copy requirements first to maximize cache; then copy app code.
+- **APT hygiene**: `apt-get update && apt-get install -y --no-install-recommends ...` and clean `rm -rf /var/lib/apt/lists/*` in same layer.
+- **Wheels in builder**: Build wheels in builder stage; copy only artifacts to runtime.
+- **Env defaults**: Set `PYTHONDONTWRITEBYTECODE=1` and `PYTHONUNBUFFERED=1`.
+- **Labels**: Add OCI labels (title, version, source, description, revision).
+- **Entrypoint/CMD**: Use a small `ENTRYPOINT` script where needed; keep `CMD` override-friendly.
+- **Healthcheck**: Provide a `HEALTHCHECK` that probes `/api/v1/status` or similar.
+- **.dockerignore**: Ensure a `.dockerignore` excluding `__pycache__/`, `.git/`, `.venv/`, `tests/`, `*.pyc`, etc.
+
+## 2) Security
+
+- **Least privilege**: No root in runtime, minimal packages, read-only root FS where possible.
+- **Network**: Restrict exposed ports to what is needed. Avoid `EXPOSE` for internal services unless required.
+- **Supply-chain**: Prefer official images, scan images regularly (e.g., Trivy, Grype). Consider SBOM generation.
+
+## 3) Runtime & Server
+
+- **Server**: Use `uvicorn` for FastAPI: `uvicorn app.main:app --host 0.0.0.0 --port 8000`.
+- **Workers**: For CPU-bound or heavy IO, use appropriate worker counts via env vars (e.g., `WEB_CONCURRENCY`).
+- **Signals**: Ensure graceful shutdown handling.
+
+## 4) docker-compose
+
+- **Profiles**: Separate `dev` and `prod` via profiles or separate files; keep prod minimal and secure.
+- **Healthchecks**: Define service healthchecks and use `depends_on` with `condition: service_healthy`.
+- **Env**: Use `env_file` for local overrides (no secrets committed). Consider `secrets:` for sensitive config.
+- **Resources**: Set memory/CPU limits for production profiles.
+- **Restart policy**: Use `restart: unless-stopped` or `on-failure` as appropriate.
+- **Networks**: Use named networks for clarity and isolation.
+- **Volumes**: Use named volumes for stateful data.
+
+## 5) CI/CD & Reproducibility
+
+- **Buildx**: Use BuildKit/Buildx for better caching and multi-arch builds.
+- **Tags**: Tag images with semver (if applicable) and git SHA. Avoid mutable `latest` in prod deploys.
+- **Scanning**: Integrate vulnerability scans in CI.
+- **SBOM**: Generate SBOMs (e.g., Syft) for provenance.
+- **Lint**: Run Hadolint in CI for Dockerfile lint rules.
+
+@Dockerfile
+@docker-compose.yml
