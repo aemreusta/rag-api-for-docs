@@ -11,21 +11,25 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi",
     "uvicorn",
+    "httpx",
     "python-dotenv",
     "langfuse",
     "llama-index",
     "llama-index-llms-openrouter",
     "llama-index-vector-stores-postgres",
     "llama-index-embeddings-huggingface",
+    "pydantic-settings",
     "psycopg2-binary",
     "pgvector",
     "pydantic==2.5.2",
+    "structlog",
     "beautifulsoup4",
     "html2text",
     "unstructured",
     "reportlab",
     "alembic",
-    "redis"
+    "redis",
+    "groq",
 ]
 keywords = [
     "python", "nlp", "api", "docker", "chatbot", "postgresql", "charity", "non-profit", "observability", "rag", "fastapi", "llm", "generative-ai", "llmops", "llama-index", "pgvector", "langfuse"
@@ -46,6 +50,9 @@ select = [
 ]
 ignore = []
 
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
@@ -64,3 +71,7 @@ changelog_file = "CHANGELOG.md"
 markers = [
   "integration: marks tests as integration tests that may require external services (deselect with '-m \"not integration\"')",
 ]
+
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
