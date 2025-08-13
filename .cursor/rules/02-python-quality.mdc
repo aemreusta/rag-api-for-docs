@@ -7,11 +7,11 @@ alwaysApply: false
 
 This is the most important rule. Generating code that passes our static analysis tools is mandatory. The following rules are based on recurring failures in our `pre-commit` checks.
 
-### 1. The Golden Rule: Defensive Coding for `None` and `Any`
+## 1. The Golden Rule: Defensive Coding for `None` and `Any`
 
 Almost all our `mypy` errors come from incorrectly handling values that could be `None` or are typed as `Any`. You MUST write defensive code.
 
-#### **A. Strict `None` Handling**
+### **A. Strict `None` Handling**
 
 Before you use a variable in any operation (arithmetic, attribute access, passing to a function that expects a non-optional type), you **MUST** check if it is `None`.
 
@@ -29,7 +29,7 @@ def process_data(value: int | None):
     return value + 5
 ```
 
-#### **B. Resolving `Any`**
+### **B. Resolving `Any`**
 
 Values from dictionaries (`.get()`) or untyped libraries are often `Any`. Do not pass these values around. Narrow the type as soon as possible.
 
@@ -49,14 +49,14 @@ def get_name(data: dict) -> str | None:
     return None
 ```
 
-### 2. Common MyPy Errors and How to Fix Them
+## 2. Common MyPy Errors and How to Fix Them
 
 - **`[assignment]` / `[arg-type]` Errors**: The variable/parameter was defined as `str`, but you're trying to assign `str | None`. Fix the type definition to `str | None` or perform a `None` check before assigning/passing.
 - **`[no-any-return]` Errors**: Your function promises to return a `Hospital`, but you are returning a value from a dictionary lookup which `mypy` sees as `Any`. Ensure the object you return is correctly typed before the `return` statement.
 - **`[valid-type]` Error**: You used the keyword `any`. You meant to use `Any` from the `typing` module. **ALWAYS** `from typing import Any`.
 - **`[dict-item]` Errors**: Your dictionary is typed as `dict[str, float]` but you are trying to assign a `None` value. Change the type to `dict[str, float | None]`.
 
-### 3. Ruff Linting & Formatting (Repository-Enforced)
+## 3. Ruff Linting & Formatting (Repository-Enforced)
 
 - All code MUST be formatted with `ruff format .` and pass `ruff check .` using the config in `pyproject.toml`.
 - **Line length**: 100 characters (Ruff `E501`).
