@@ -22,7 +22,7 @@ flowchart TD
     
     subgraph "Redis Cache Structure"
         RC1["groq:rate_limit"]
-        RC2["{<br/>remaining_requests: int<br/>remaining_tokens: int<br/>retry_after_seconds: int<br/>timestamp: float<br/>}"]
+        RC2["{remaining_requests:int; remaining_tokens:int; retry_after_seconds:int; timestamp:float}"]
         RC3["TTL: 300s (5 minutes)"]
     end
     
