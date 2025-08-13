@@ -592,6 +592,20 @@ class GroqProvider(LLMProvider):
             self.logger.warning("Groq request timed out", timeout=self.timeout_seconds)
             raise TimeoutError(f"Groq request timed out after {self.timeout_seconds}s") from err
         except Exception as e:
+            # Gracefully degrade on service unavailability by returning a minimal response
+            err_text = str(e).lower()
+            if "503" in err_text or "service unavailable" in err_text:
+                from llama_index.core.base.llms.types import MessageRole
+
+                fallback_text = "Service unavailable from Groq. Please try again later."
+                response_message = ChatMessage(role=MessageRole.ASSISTANT, content=fallback_text)
+                self.logger.error(
+                    "Groq completion failed with 503; returning fallback response",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+                return CompletionResponse(text=fallback_text, message=response_message, raw={})
+
             self.logger.error("Groq completion failed", error=str(e), error_type=type(e).__name__)
             raise
 

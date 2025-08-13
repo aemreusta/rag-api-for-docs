@@ -19,7 +19,9 @@ from app.core.metrics import get_metrics_backend
 from app.core.quality import QualityAssurance
 from app.core.storage import get_storage_backend
 
-router = APIRouter(prefix="/docs", tags=["Documents"])
+router = APIRouter(
+    prefix="/docs", tags=["Documents"], responses={404: {"description": "Not found"}}
+)
 logger = get_logger(__name__)
 metrics = get_metrics_backend()
 
@@ -59,7 +61,24 @@ UPLOAD_FILE_FORM = File(...)
 DB_DEP_UPLOAD: Session = Depends(get_db_session)
 
 
-@router.post("/upload", response_model=DocumentDetail, status_code=201)
+@router.post(
+    "/upload",
+    response_model=DocumentDetail,
+    status_code=201,
+    summary="Upload a document",
+    response_description="Document enqueued for processing",
+    description=(
+        "Upload a document for ingestion.\n\n"
+        "- Accepts: multipart/form-data with `file`\n"
+        "- Validates file size and type\n"
+        "- Stores file using configured storage backend (local or MinIO)\n"
+        "- Deduplicates by content hash; bumps version on change\n"
+        "- Enqueues background processing job\n\n"
+        "Returns basic document metadata and initial status.\n\n"
+        "Example cURL:\n\n"
+        'curl -X POST -F "file=@mydoc.pdf" http://localhost:8000/api/v1/docs/upload'
+    ),
+)
 async def upload_document(
     file: UploadFile = UPLOAD_FILE_FORM, db: Session = DB_DEP_UPLOAD
 ) -> DocumentDetail:
@@ -123,12 +142,23 @@ async def upload_document(
     return DocumentDetail(**asdict(record))
 
 
-@router.get("", response_model=list[DocumentSummary])
+@router.get(
+    "",
+    response_model=list[DocumentSummary],
+    summary="List documents",
+    response_description="Summary list of documents",
+)
 async def list_documents() -> list[DocumentSummary]:
     return [DocumentSummary(**asdict(r)) for r in _DOCUMENTS.values()]
 
 
-@router.get("/{doc_id}", response_model=DocumentDetail)
+@router.get(
+    "/{doc_id}",
+    response_model=DocumentDetail,
+    summary="Get document",
+    response_description="Document details",
+    description="Get document metadata by id.",
+)
 async def get_document(doc_id: str) -> DocumentDetail:
     record = _DOCUMENTS.get(doc_id)
     if record is None:
@@ -136,7 +166,13 @@ async def get_document(doc_id: str) -> DocumentDetail:
     return DocumentDetail(**asdict(record))
 
 
-@router.get("/status/{doc_id}", response_model=DocumentStatus)
+@router.get(
+    "/status/{doc_id}",
+    response_model=DocumentStatus,
+    summary="Get document status",
+    response_description="Document status",
+    description="Get ingestion status of a document by id.",
+)
 async def get_document_status(doc_id: str) -> DocumentStatus:
     record = _DOCUMENTS.get(doc_id)
     if record is None:
@@ -190,7 +226,15 @@ class DetectChangesResponse(BaseModel):
 DB_DEP_CHANGES: Session = Depends(get_db_session)
 
 
-@router.post("/detect-changes", response_model=DetectChangesResponse)
+@router.post(
+    "/detect-changes",
+    response_model=DetectChangesResponse,
+    summary="Detect changes",
+    description=(
+        "Detect changed pages compared to current stored version.\n\n"
+        "Provide a `document_id`, a new `content_hash`, and optionally per-page hashes."
+    ),
+)
 async def detect_changes(
     payload: DetectChangesRequest, db: Session = DB_DEP_CHANGES
 ) -> DetectChangesResponse:
@@ -223,7 +267,18 @@ class ApplyChangesResponse(BaseModel):
 DB_DEP: Session = Depends(get_db_session)
 
 
-@router.put("/apply-changes", response_model=ApplyChangesResponse, status_code=200)
+@router.put(
+    "/apply-changes",
+    response_model=ApplyChangesResponse,
+    status_code=200,
+    summary="Apply changes",
+    description=(
+        "Apply detected changes: re-embed changed pages and upsert chunks.\n\n"
+        "- Re-embeds only changed pages\n"
+        "- Upserts chunk rows with page metadata\n"
+        "- Bumps document version and updates content hash"
+    ),
+)
 async def apply_changes(payload: ApplyChangesRequest, db: Session = DB_DEP) -> ApplyChangesResponse:
     proc = IncrementalProcessor()
     # Convert response-model shape back into ChangeSet
@@ -262,7 +317,12 @@ class JobStatusResponse(BaseModel):
     detail: dict | None = None
 
 
-@router.get("/jobs/{job_id}", response_model=JobStatusResponse)
+@router.get(
+    "/jobs/{job_id}",
+    response_model=JobStatusResponse,
+    summary="Get job status",
+    description="Get background job status by id.",
+)
 async def get_job_status(job_id: str) -> JobStatusResponse:
     """Map Celery job states to API status semantics."""
     try:
