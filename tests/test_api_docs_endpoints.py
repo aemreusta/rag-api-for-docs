@@ -34,7 +34,18 @@ def test_upload_and_list_documents():
 
 
 def test_upload_calls_deduplicator():
+    class FakeCache:
+        def __init__(self):
+            self._store = {}
+
+        async def get(self, key: str):
+            return self._store.get(key)
+
+        async def set(self, key: str, value, ttl: int = 600):
+            self._store[key] = value
+
     with (
+        patch("app.api.v1.docs.get_cache_backend", return_value=FakeCache()),
         patch("app.api.v1.docs.storage") as mock_storage,
         patch("app.api.v1.docs.ContentDeduplicator.upsert_document_by_hash") as mock_upsert,
     ):
