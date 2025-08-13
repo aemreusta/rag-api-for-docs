@@ -13,7 +13,7 @@ def test_upload_and_list_documents():
     # Upload a fake file (mock storage backend to avoid filesystem writes)
     with patch("app.api.v1.docs.storage") as mock_storage:
         mock_storage.store_file.return_value = "file:///tmp/uploaded_docs/sample.txt"
-        files = {"file": ("sample.txt", b"hello", "text/plain")}
+        files = {"file": ("sample.txt", b"hello-unique", "text/plain")}
         r = client.post("/api/v1/docs/upload", files=files)
     assert r.status_code == 201
     doc = r.json()
