@@ -21,6 +21,10 @@ def pytest_configure(config):
         "markers",
         "integration: marks tests as integration tests that may require external services",
     )
+    config.addinivalue_line(
+        "markers",
+        "minio: marks tests that exercise the MinIO/S3 storage path",
+    )
 
 
 # Path already configured above
