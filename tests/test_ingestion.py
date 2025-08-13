@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.core.config import settings
+from app.core.metrics import get_metrics_backend
 from scripts.ingest import PDF_DIRECTORY, main
 
 # Mock the ingestion dependencies to avoid actual DB calls
@@ -116,6 +117,13 @@ def test_ingestion_missing_pgvector_extension(mock_langfuse_handler, mock_connec
 def test_pdf_directory_exists():
     """Test that the PDF directory exists."""
     assert os.path.exists("pdf_documents/"), "PDF documents directory should exist"
+
+
+def test_ingest_metrics_backend_smoke():
+    metrics = get_metrics_backend()
+    # Should not raise when recording ingest metrics regardless of backend
+    metrics.increment_counter("ingest_requests_total", {"status": "accepted"})
+    metrics.record_histogram("ingest_latency_seconds", 0.01, {"status": "accepted"})
 
 
 def test_sample_pdfs_and_texts_exist():
