@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db_session
 from app.core.dedup import ContentDeduplicator, compute_sha256_hex
 from app.core.incremental import ChangeSet, IncrementalProcessor
+from app.core.jobs import process_document_async
 from app.core.logging_config import get_logger
 from app.core.metrics import get_metrics_backend
 from app.core.quality import QualityAssurance
@@ -97,9 +98,16 @@ async def upload_document(
     record = DocumentRecord(id=doc.id, filename=file.filename, status="pending")
     _DOCUMENTS[doc.id] = record
 
-    # Note: Real implementation will persist file, enqueue job, and return job-aware status
+    # Enqueue background processing
+    try:
+        job_id = str(uuid.uuid4())
+        process_document_async.delay(job_id, {"document_id": doc.id, "storage_uri": storage_uri})
+        logger.info(
+            "upload_enqueued", extra={"doc_id": doc.id, "filename": file.filename, "job_id": job_id}
+        )
+    except Exception:
+        logger.warning("failed_to_enqueue_background_job", extra={"doc_id": doc.id})
     metrics.increment_counter("vector_search_requests_total", {"status": "ingest"})
-    logger.info("upload_enqueued", extra={"doc_id": doc.id, "filename": file.filename})
     return DocumentDetail(**asdict(record))
 
 
