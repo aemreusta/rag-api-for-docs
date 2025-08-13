@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_session
+from app.core.cache import get_cache_backend
 from app.core.dedup import ContentDeduplicator, compute_sha256_hex
 from app.core.incremental import ChangeSet, IncrementalProcessor
 from app.core.jobs import celery_app, process_document_async
@@ -82,7 +83,18 @@ async def upload_document(
     payload = await file.read()
     content_hash = compute_sha256_hex(payload)
     safe_name = _safe_filename(file.filename)
-    storage_uri = storage.store_file(payload, safe_name)
+    # Cache check: if a document with this content_hash was recently processed, reuse storage_uri
+    try:
+        cache = await get_cache_backend()
+        cache_key = f"doc_hash:{content_hash}"
+        cached_uri = await cache.get(cache_key)
+        if isinstance(cached_uri, str) and cached_uri:
+            storage_uri = cached_uri
+        else:
+            storage_uri = storage.store_file(payload, safe_name)
+            await cache.set(cache_key, storage_uri, ttl=600)
+    except Exception:
+        storage_uri = storage.store_file(payload, safe_name)
     dedup = ContentDeduplicator()
     doc, _ = dedup.upsert_document_by_hash(
         db,

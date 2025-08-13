@@ -13,7 +13,7 @@ def test_upload_and_list_documents():
     # Upload a fake file (mock storage backend to avoid filesystem writes)
     with patch("app.api.v1.docs.storage") as mock_storage:
         mock_storage.store_file.return_value = "file:///tmp/uploaded_docs/sample.txt"
-        files = {"file": ("sample.txt", b"hello", "text/plain")}
+        files = {"file": ("sample.txt", b"hello-unique", "text/plain")}
         r = client.post("/api/v1/docs/upload", files=files)
     assert r.status_code == 201
     doc = r.json()
@@ -25,9 +25,27 @@ def test_upload_and_list_documents():
     items = r.json()
     assert any(item["id"] == doc["id"] for item in items)
 
+    # Re-upload same content should still succeed; storage may be skipped via cache
+    with patch("app.api.v1.docs.storage") as mock_storage2:
+        mock_storage2.store_file.return_value = "file:///tmp/uploaded_docs/sample.txt"
+        files = {"file": ("sample.txt", b"hello", "text/plain")}
+        r2 = client.post("/api/v1/docs/upload", files=files)
+        assert r2.status_code == 201
+
 
 def test_upload_calls_deduplicator():
+    class FakeCache:
+        def __init__(self):
+            self._store = {}
+
+        async def get(self, key: str):
+            return self._store.get(key)
+
+        async def set(self, key: str, value, ttl: int = 600):
+            self._store[key] = value
+
     with (
+        patch("app.api.v1.docs.get_cache_backend", return_value=FakeCache()),
         patch("app.api.v1.docs.storage") as mock_storage,
         patch("app.api.v1.docs.ContentDeduplicator.upsert_document_by_hash") as mock_upsert,
     ):
@@ -66,6 +84,36 @@ def test_upload_uses_minio_storage():
         # Ensure dedup received s3 URI from MinIO-like backend
         _, kwargs = mock_upsert.call_args
         assert kwargs["storage_uri"].startswith("s3://")
+
+
+def test_upload_uses_storage_cache_by_content_hash():
+    class FakeCache:
+        def __init__(self):
+            self._store = {}
+
+        async def get(self, key: str):  # noqa: D401
+            return self._store.get(key)
+
+        async def set(self, key: str, value, ttl: int = 600):  # noqa: D401
+            self._store[key] = value
+
+    fake_cache = FakeCache()
+
+    with (
+        patch("app.api.v1.docs.get_cache_backend", return_value=fake_cache),
+        patch("app.api.v1.docs.storage") as mock_storage,
+    ):
+        mock_storage.store_file.return_value = "file:///tmp/uploaded_docs/sample.txt"
+        files = {"file": ("cached.txt", b"same-bytes", "text/plain")}
+        # First upload should call storage and populate cache
+        r1 = client.post("/api/v1/docs/upload", files=files)
+        assert r1.status_code == 201
+        assert mock_storage.store_file.call_count == 1
+
+        # Second upload with same content should hit cache and not call storage again
+        r2 = client.post("/api/v1/docs/upload", files=files)
+        assert r2.status_code == 201
+        assert mock_storage.store_file.call_count == 1
 
 
 def test_upload_validation_rejects_large_file():
