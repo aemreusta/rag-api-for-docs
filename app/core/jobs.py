@@ -14,8 +14,9 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 from app.core.dedup import ContentDeduplicator
 from app.core.incremental import IncrementalProcessor
-from app.core.ingestion import IngestionEngine
+from app.core.ingestion import NLTKAdaptiveChunker
 from app.core.logging_config import get_logger, setup_logging
+from app.core.metadata import ChunkMetadataExtractor
 from app.db.models import Document
 
 # Ensure logging is configured for workers
@@ -89,14 +90,24 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
         except Exception:
             file_text = ""
 
-        # Chunk using the same chunker as ingestion
-        chunks = IngestionEngine(processors=[])._chunker.chunk(file_text) if file_text else []  # type: ignore[attr-defined]
+        # Chunk using the same chunker implementation as ingestion
+        chunks = NLTKAdaptiveChunker().chunk(file_text) if file_text else []
 
         # Upsert chunks
         dedup = ContentDeduplicator()
         prepared = []
+        ChunkMetadataExtractor()
+        # In this minimal async path, we don't have page splits; set page_number=None and no headers
         for idx, content in enumerate(chunks):
-            prepared.append({"index": idx, "content": content, "page_number": None})
+            prepared.append(
+                {
+                    "index": idx,
+                    "content": content,
+                    "page_number": None,
+                    "section_title": None,
+                    "extra_metadata": {"headers": []},
+                }
+            )
         if prepared:
             dedup.upsert_chunks(
                 session,

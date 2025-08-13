@@ -11,6 +11,7 @@ from app.core.dedup import ChunkInput, ContentDeduplicator
 from app.core.embeddings import get_embedding_model
 from app.core.ingestion import NLTKAdaptiveChunker
 from app.core.logging_config import get_logger
+from app.core.metadata import ChunkMetadataExtractor, summarize_headers
 from app.core.metrics import get_metrics_backend
 from app.db.models import ContentEmbedding, Document, DocumentChunk
 
@@ -45,6 +46,7 @@ class IncrementalProcessor:
         self._logger = get_logger(__name__)
         self._chunker = NLTKAdaptiveChunker()
         self._metrics = get_metrics_backend()
+        self._meta_extractor = ChunkMetadataExtractor()
 
     def detect_changes(
         self,
@@ -195,6 +197,19 @@ class IncrementalProcessor:
         new_chunks = self._chunker.chunk(text)
         if not new_chunks:
             return []
+        # Derive page-level metadata once
+        page_meta = self._meta_extractor.extract_page_metadata(
+            page_number=page_number, page_text=text
+        )
+        if page_meta.headers:
+            self._logger.info(
+                "page_metadata_detected",
+                extra={
+                    "document_id": document_id,
+                    "page_number": page_number,
+                    "headers": summarize_headers(page_meta.headers),
+                },
+            )
         existing = (
             db.query(DocumentChunk)
             .filter(
@@ -212,7 +227,13 @@ class IncrementalProcessor:
                 last_idx = existing[-1].chunk_index if existing else -1
                 idx = last_idx + 1 + (i - len(existing))
             prepared.append(
-                ChunkInput(index=idx, content=content, page_number=page_number, extra_metadata={})
+                ChunkInput(
+                    index=idx,
+                    content=content,
+                    page_number=page_number,
+                    section_title=self._meta_extractor.assign_section_title(page_meta, content),
+                    extra_metadata=self._meta_extractor.build_chunk_extra_metadata(page_meta),
+                )
             )
         return prepared
 
