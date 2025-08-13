@@ -7,10 +7,13 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.dedup import ChunkInput, ContentDeduplicator
 from app.core.embeddings import get_embedding_model
 from app.core.ingestion import NLTKAdaptiveChunker
 from app.core.logging_config import get_logger
-from app.db.models import ContentEmbedding, Document
+from app.core.metadata import ChunkMetadataExtractor, summarize_headers
+from app.core.metrics import get_metrics_backend
+from app.db.models import ContentEmbedding, Document, DocumentChunk
 
 
 @dataclass(frozen=True)
@@ -42,6 +45,8 @@ class IncrementalProcessor:
     def __init__(self) -> None:
         self._logger = get_logger(__name__)
         self._chunker = NLTKAdaptiveChunker()
+        self._metrics = get_metrics_backend()
+        self._meta_extractor = ChunkMetadataExtractor()
 
     def detect_changes(
         self,
@@ -106,8 +111,29 @@ class IncrementalProcessor:
         if new_page_texts is None:
             raise ValueError("new_page_texts is required for selective re-embedding")
 
-        # 1) Delete existing vectors for changed pages
+        # 1) Document-level dedup/versioning
         source_document = document.filename or document.original_filename or document.id
+        if new_content_hash:
+            try:
+                # Use existing document attributes to drive dedup/version bump
+                dedup = ContentDeduplicator()
+                _doc, _action = dedup.upsert_document_by_hash(
+                    db,
+                    filename=document.filename,
+                    storage_uri=document.storage_uri,
+                    mime_type=document.mime_type,
+                    file_size=document.file_size,
+                    page_count=document.page_count,
+                    new_content_hash=new_content_hash,
+                    language=document.language or "en",
+                    created_by=document.created_by,
+                    tags=getattr(document, "tags", None),
+                )
+            except Exception:
+                # Defensive: proceed even if dedup path fails
+                pass
+
+        # 2) Delete existing vectors for changed pages
         (
             db.query(ContentEmbedding)
             .filter(
@@ -117,19 +143,99 @@ class IncrementalProcessor:
             .delete(synchronize_session=False)
         )
 
-        # 2) Re-embed only changed pages
+        # 3) Re-embed only changed pages
+        from time import time
+
+        t0 = time()
         self._reembed_pages(
             page_texts={p: new_page_texts.get(p, "") for p in changes.changed_pages},
             source_document=source_document,
         )
+        self._metrics.record_histogram(
+            "embedding_latency_seconds", time() - t0, {"stage": "incremental_reembed"}
+        )
+        # 4) Upsert chunks for changed pages (acceptance: inserts for new, updates for changed)
+        try:
+            dedup = ContentDeduplicator()
+            for page in changes.changed_pages:
+                text = new_page_texts.get(page, "")
+                if not text:
+                    continue
+                prepared = self._prepare_chunk_inputs(
+                    db=db, document_id=document_id, page_number=page, text=text
+                )
+                if prepared:
+                    res = dedup.upsert_chunks(db, document_id=document_id, chunks=prepared)
+                    # Structured log with key fields
+                    self._logger.info(
+                        "chunks_upserted",
+                        extra={
+                            "document_id": document_id,
+                            "page_number": page,
+                            "inserted": res.get("inserted", 0),
+                            "updated": res.get("updated", 0),
+                            "unchanged": res.get("unchanged", 0),
+                        },
+                    )
+        except Exception:
+            # Defensive: chunk upsert failures shouldn't break re-embedding path
+            pass
+        # Dedup already handled version/hash; no direct doc mutation here
 
-        # 3) Bump version and update hashes/metadata
-        if changes.is_new_version:
-            document.version = (document.version or 0) + 1
-        if new_content_hash:
-            document.content_hash = new_content_hash
-        db.add(document)
-        db.commit()
+    def _prepare_chunk_inputs(
+        self, *, db: Session, document_id: str, page_number: int, text: str
+    ) -> list[ChunkInput]:
+        """Chunk page text and map to stable indices based on existing rows.
+
+        Strategy:
+        - Enumerate new chunks for the page
+        - Fetch existing chunks for (document_id, page_number) ordered by index
+        - Assign existing indices to the first N new chunks
+        - If more new chunks than existing, append with next indices (inserts)
+        - If fewer new chunks than existing, do not delete extras
+        """
+        new_chunks = self._chunker.chunk(text)
+        if not new_chunks:
+            return []
+        # Derive page-level metadata once
+        page_meta = self._meta_extractor.extract_page_metadata(
+            page_number=page_number, page_text=text
+        )
+        if page_meta.headers:
+            self._logger.info(
+                "page_metadata_detected",
+                extra={
+                    "document_id": document_id,
+                    "page_number": page_number,
+                    "headers": summarize_headers(page_meta.headers),
+                },
+            )
+        existing = (
+            db.query(DocumentChunk)
+            .filter(
+                DocumentChunk.document_id == document_id,
+                DocumentChunk.page_number == page_number,
+            )
+            .order_by(DocumentChunk.chunk_index.asc())
+            .all()
+        )
+        prepared: list[ChunkInput] = []
+        for i, content in enumerate(new_chunks):
+            if i < len(existing):
+                idx = existing[i].chunk_index
+            else:
+                last_idx = existing[-1].chunk_index if existing else -1
+                idx = last_idx + 1 + (i - len(existing))
+            prepared.append(
+                ChunkInput(
+                    index=idx,
+                    content=content,
+                    page_number=page_number,
+                    section_title=self._meta_extractor.assign_section_title(page_meta, content),
+                    extra_metadata=self._meta_extractor.build_chunk_extra_metadata(page_meta),
+                )
+            )
+        return prepared
 
     def _reembed_pages(self, *, page_texts: Mapping[int, str], source_document: str) -> None:
         """Chunk and embed provided page texts, storing vectors via PGVectorStore.

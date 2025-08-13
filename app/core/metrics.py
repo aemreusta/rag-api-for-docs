@@ -121,6 +121,52 @@ class PrometheusBackend(MetricsBackend):
             registry,
         )
 
+        # Embedding latency
+        self.embedding_latency = self._create_metric_safe(
+            lambda: Histogram(
+                "embedding_latency_seconds",
+                "Time spent generating embeddings",
+                labelnames=["stage"],
+                buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+            ),
+            "embedding_latency_seconds",
+            registry,
+        )
+
+        # Dedup & versioning counters
+        self.dedup_hits = self._create_metric_safe(
+            lambda: Counter("dedup_hits_total", "Total dedup hits at document level"),
+            "dedup_hits_total",
+            registry,
+        )
+        self.version_bumps = self._create_metric_safe(
+            lambda: Counter("version_bumps_total", "Total document version bumps"),
+            "version_bumps_total",
+            registry,
+        )
+        self.documents_created = self._create_metric_safe(
+            lambda: Counter("documents_created_total", "Total new documents created"),
+            "documents_created_total",
+            registry,
+        )
+
+        # Chunk operations counters
+        self.chunks_inserted = self._create_metric_safe(
+            lambda: Counter("chunks_inserted_total", "Total chunks inserted"),
+            "chunks_inserted_total",
+            registry,
+        )
+        self.chunks_updated = self._create_metric_safe(
+            lambda: Counter("chunks_updated_total", "Total chunks updated"),
+            "chunks_updated_total",
+            registry,
+        )
+        self.chunks_unchanged = self._create_metric_safe(
+            lambda: Counter("chunks_unchanged_total", "Total chunks unchanged"),
+            "chunks_unchanged_total",
+            registry,
+        )
+
     def _create_cache_metrics(self, Counter, registry):
         """Create cache metrics."""
         self.cache_hits = self._create_metric_safe(
@@ -194,6 +240,12 @@ class PrometheusBackend(MetricsBackend):
             and self.ingest_latency is not None
         ):
             self.ingest_latency.labels(**(labels or {})).observe(value)
+        elif (
+            name == "embedding_latency_seconds"
+            and hasattr(self, "embedding_latency")
+            and self.embedding_latency is not None
+        ):
+            self.embedding_latency.labels(**(labels or {})).observe(value)
 
     def increment_counter(self, name: str, labels: dict[str, str] | None = None) -> None:
         if not self._metrics_available:
@@ -201,42 +253,37 @@ class PrometheusBackend(MetricsBackend):
 
         label_values = labels or {}
 
-        if (
-            name == "vector_search_requests_total"
-            and hasattr(self, "vector_search_requests")
-            and self.vector_search_requests is not None
-        ):
-            self.vector_search_requests.labels(**label_values).inc()
-        elif (
-            name == "ingest_requests_total"
-            and hasattr(self, "ingest_requests")
-            and self.ingest_requests is not None
-        ):
-            self.ingest_requests.labels(**label_values).inc()
-        elif (
-            name == "cache_hits_total"
-            and hasattr(self, "cache_hits")
-            and self.cache_hits is not None
-        ):
-            self.cache_hits.labels(**label_values).inc()
-        elif (
-            name == "cache_misses_total"
-            and hasattr(self, "cache_misses")
-            and self.cache_misses is not None
-        ):
-            self.cache_misses.labels(**label_values).inc()
-        elif (
-            name == "cache_evictions_total"
-            and hasattr(self, "cache_evictions")
-            and self.cache_evictions is not None
-        ):
-            self.cache_evictions.labels(**label_values).inc()
-        elif (
-            name == "cache_errors_total"
-            and hasattr(self, "cache_errors")
-            and self.cache_errors is not None
-        ):
-            self.cache_errors.labels(**label_values).inc()
+        # Mapping to reduce branching complexity
+        labelled_counters = {
+            "vector_search_requests_total": "vector_search_requests",
+            "ingest_requests_total": "ingest_requests",
+            "cache_hits_total": "cache_hits",
+            "cache_misses_total": "cache_misses",
+            "cache_evictions_total": "cache_evictions",
+            "cache_errors_total": "cache_errors",
+        }
+        plain_counters = {
+            "dedup_hits_total": "dedup_hits",
+            "version_bumps_total": "version_bumps",
+            "documents_created_total": "documents_created",
+            "chunks_inserted_total": "chunks_inserted",
+            "chunks_updated_total": "chunks_updated",
+            "chunks_unchanged_total": "chunks_unchanged",
+        }
+
+        metric_attr = labelled_counters.get(name)
+        if metric_attr is not None:
+            metric = getattr(self, metric_attr, None)
+            if metric is not None:
+                metric.labels(**label_values).inc()
+            return
+
+        metric_attr = plain_counters.get(name)
+        if metric_attr is not None:
+            metric = getattr(self, metric_attr, None)
+            if metric is not None:
+                metric.inc()
+            return
 
     def increment(
         self, name: str, labels: dict[str, str] | None = None, value: float = 1.0

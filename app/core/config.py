@@ -44,6 +44,14 @@ class Settings(BaseSettings):
 
     # Document Settings
     PDF_DOCUMENTS_DIR: str = "pdf_documents"
+    UPLOADED_DOCS_DIR: str = "uploaded_docs"
+    STORAGE_BACKEND: str = "local"  # local|minio
+    # MinIO (optional)
+    MINIO_ENDPOINT: str = ""
+    MINIO_ACCESS_KEY: str = ""
+    MINIO_SECRET_KEY: str = ""
+    MINIO_BUCKET: str = "uploads"
+    MINIO_SECURE: bool = False
 
     # Vector Embeddings Settings
     # Options: hf | openai | google

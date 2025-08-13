@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import asdict, dataclass
 from typing import Literal
@@ -9,14 +10,19 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_session
+from app.core.dedup import ContentDeduplicator, compute_sha256_hex
 from app.core.incremental import ChangeSet, IncrementalProcessor
+from app.core.jobs import celery_app, process_document_async
 from app.core.logging_config import get_logger
 from app.core.metrics import get_metrics_backend
 from app.core.quality import QualityAssurance
+from app.core.storage import get_storage_backend
 
 router = APIRouter(prefix="/docs", tags=["Documents"])
 logger = get_logger(__name__)
 metrics = get_metrics_backend()
+
+storage = get_storage_backend()
 
 
 # In-memory storage for prototype behavior (to be replaced by DB integration)
@@ -49,8 +55,13 @@ class DocumentDetail(DocumentSummary):
 UPLOAD_FILE_FORM = File(...)
 
 
+DB_DEP_UPLOAD: Session = Depends(get_db_session)
+
+
 @router.post("/upload", response_model=DocumentDetail, status_code=201)
-async def upload_document(file: UploadFile = UPLOAD_FILE_FORM) -> DocumentDetail:
+async def upload_document(
+    file: UploadFile = UPLOAD_FILE_FORM, db: Session = DB_DEP_UPLOAD
+) -> DocumentDetail:
     if not file or not file.filename:
         raise HTTPException(status_code=400, detail="File is required")
 
@@ -63,13 +74,40 @@ async def upload_document(file: UploadFile = UPLOAD_FILE_FORM) -> DocumentDetail
         )
         raise HTTPException(status_code=400, detail=f"Invalid upload: {validation.reason}")
 
-    doc_id = str(uuid.uuid4())
-    record = DocumentRecord(id=doc_id, filename=file.filename, status="pending")
-    _DOCUMENTS[doc_id] = record
+    # Persist file to local storage and upsert document via deduplicator
+    def _safe_filename(name: str) -> str:
+        base = re.sub(r"[^A-Za-z0-9._-]", "_", name).strip("._-") or "upload"
+        return base[:200]
 
-    # Note: Real implementation will persist file, enqueue job, and return job-aware status
+    payload = await file.read()
+    content_hash = compute_sha256_hex(payload)
+    safe_name = _safe_filename(file.filename)
+    storage_uri = storage.store_file(payload, safe_name)
+    dedup = ContentDeduplicator()
+    doc, _ = dedup.upsert_document_by_hash(
+        db,
+        filename=file.filename,
+        storage_uri=storage_uri,
+        mime_type=file.content_type or "application/octet-stream",
+        file_size=len(payload),
+        page_count=None,
+        new_content_hash=content_hash,
+    )
+
+    # Bridge to prototype in-memory tracking using DB document id
+    record = DocumentRecord(id=doc.id, filename=file.filename, status="pending")
+    _DOCUMENTS[doc.id] = record
+
+    # Enqueue background processing
+    try:
+        job_id = str(uuid.uuid4())
+        process_document_async.delay(job_id, {"document_id": doc.id, "storage_uri": storage_uri})
+        logger.info(
+            "upload_enqueued", extra={"doc_id": doc.id, "filename": file.filename, "job_id": job_id}
+        )
+    except Exception:
+        logger.warning("failed_to_enqueue_background_job", extra={"doc_id": doc.id})
     metrics.increment_counter("vector_search_requests_total", {"status": "ingest"})
-    logger.info("upload_enqueued", extra={"doc_id": doc_id, "filename": file.filename})
     return DocumentDetail(**asdict(record))
 
 
@@ -199,3 +237,42 @@ async def apply_changes(payload: ApplyChangesRequest, db: Session = DB_DEP) -> A
     except Exception:
         version = None
     return ApplyChangesResponse(updated_pages=payload.changes.changed_pages, version=version)
+
+
+# ----------------------------
+# Jobs status endpoint
+# ----------------------------
+
+
+class JobStatusResponse(BaseModel):
+    id: str
+    status: Literal["pending", "processing", "completed", "failed", "retry"]
+    detail: dict | None = None
+
+
+@router.get("/jobs/{job_id}", response_model=JobStatusResponse)
+async def get_job_status(job_id: str) -> JobStatusResponse:
+    """Map Celery job states to API status semantics."""
+    try:
+        res = celery_app.AsyncResult(job_id)
+        state = (res.state or "PENDING").upper()
+        if state in {"PENDING"}:
+            status = "pending"
+        elif state in {"RECEIVED", "STARTED"}:
+            status = "processing"
+        elif state in {"RETRY"}:
+            status = "retry"
+        elif state in {"FAILURE"}:
+            status = "failed"
+        else:  # SUCCESS or others
+            status = "completed"
+        detail = None
+        try:
+            info = res.info  # type: ignore[attr-defined]
+            if isinstance(info, dict):
+                detail = info
+        except Exception:
+            detail = None
+        return JobStatusResponse(id=job_id, status=status, detail=detail)
+    except Exception:
+        return JobStatusResponse(id=job_id, status="pending", detail=None)
