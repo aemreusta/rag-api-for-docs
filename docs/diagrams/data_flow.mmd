@@ -10,6 +10,7 @@ graph TD
         C[PostgreSQL w/ pgvector]
         D[Redis Rate Limiter]
         J[Redis Provider Cache]
+        S[Storage Backend\nLocal or MinIO]
         G[Structured Logging]
     end
 
@@ -25,10 +26,11 @@ graph TD
     User --"1. HTTPS Request<br/>+ X-Trace-ID"--> A;
     A --"2. Rate Limit Check"--> D;
     A --"3. Generate<br/>Correlation IDs"--> G;
-    A --"4. Query"--> B;
-        B --"5. Retrieve Context (HNSW @ VECTOR(1536))"--> C;
-        B --"6. Prompt + Context"--> I;
-    I --"7. Check Provider Status"--> J;
+    A --"4. Upload → Store (file:// or s3://)"--> S;
+    A --"5. Query"--> B;
+        B --"6. Retrieve Context (HNSW @ VECTOR(1536))"--> C;
+        B --"7. Prompt + Context"--> I;
+    I --"8. Check Provider Status"--> J;
     
     I --"8a. Primary Provider"--> E1;
     I --"8b. Fallback Provider"--> E2;
@@ -40,13 +42,13 @@ graph TD
     E3 --"9c. LLM Response"--> I;
     E4 --"9d. LLM Response"--> I;
     
-    I --"10. Cache Failed Providers"--> J;
-    I --"11. Final LLM Response"--> B;
+    I --"11. Cache Failed Providers"--> J;
+    I --"12. Final LLM Response"--> B;
     
     A --"12. Send Trace Data<br/>+ trace_id"--> F;
     B --"13. Send Trace Data<br/>+ trace_id"--> F;
     I --"14. Send Provider Metrics"--> F;
     
-    B --"15. Final Answer"--> A;
-    A --"16. JSON Response<br/>+ X-Request-ID"--> User;
-    G --"17. JSON Logs<br/>+ Correlation IDs"--> H; 
+    B --"16. Final Answer"--> A;
+    A --"17. JSON Response<br/>+ X-Request-ID"--> User;
+    G --"18. JSON Logs<br/>+ Correlation IDs"--> H;

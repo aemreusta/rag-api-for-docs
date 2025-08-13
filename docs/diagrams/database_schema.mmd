@@ -3,6 +3,9 @@ graph TD
         direction LR
         subgraph "Application DB ('app')"
             T1[content_embeddings<br/>- id: INTEGER PK<br/>- source_document: VARCHAR(255)<br/>- page_number: INTEGER<br/>- content_text: TEXT<br/>- content_vector: VECTOR(1536)<br/>- Index: HNSW (m=32, ef_construction=64)]
+            T2[documents<br/>- id: VARCHAR PK<br/>- filename: VARCHAR(255)<br/>- original_filename: VARCHAR(255)<br/>- content_hash: VARCHAR(64) UNIQUE<br/>- file_size: INTEGER<br/>- mime_type: VARCHAR(100)<br/>- page_count: INTEGER<br/>- language: VARCHAR(10)<br/>- uploaded_at: TIMESTAMP<br/>- updated_at: TIMESTAMP<br/>- status: document_status<br/>- version: INTEGER<br/>- storage_backend: VARCHAR(20)<br/>- storage_uri: TEXT<br/>- soft_deleted: BOOLEAN]
+            T4[document_chunks<br/>- id: VARCHAR PK<br/>- document_id: VARCHAR FK→documents.id<br/>- chunk_index: INTEGER<br/>- content: TEXT<br/>- content_hash: VARCHAR(64)<br/>- token_count: INTEGER NULL
+- chunk_type: VARCHAR(50)<br/>- page_number: INTEGER<br/>- section_title: VARCHAR(255)<br/>- extra_metadata: JSON<br/>- created_at: TIMESTAMP]
             T3[alembic_version<br/>- version_num: VARCHAR(32) PK]
         end
 
@@ -32,6 +35,8 @@ graph TD
     end
 
     App -- "Reads/Writes RAG data" --> T1
+    App -- "Documents & metadata" --> T2
+    App -- "Chunk metadata (headers/page)" --> T4
     App -- "Migration tracking" --> T3
     App -- "Rate limiting & sessions" --> R1
     App -- "Memory & caching" --> R2
