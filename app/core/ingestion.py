@@ -73,18 +73,36 @@ class NLTKAdaptiveChunker:
         try:
             import nltk
 
-            # Ensure punkt is available; download quietly if missing
+            # Prefer nltk tokenizer only if resources are present; otherwise fallback
+            has_punkt = False
+            has_punkt_tab = False
             try:
                 nltk.data.find("tokenizers/punkt")
-            except LookupError:  # pragma: no cover - runtime bootstrap
-                nltk.download("punkt", quiet=True)
-            self._sent_tokenize = nltk.sent_tokenize
+                has_punkt = True
+            except LookupError:
+                has_punkt = False
+            try:
+                # Some newer nltk releases require punkt_tab as well
+                nltk.data.find(f"tokenizers/punkt_tab/{language}/")
+                has_punkt_tab = True
+            except LookupError:
+                has_punkt_tab = False
+
+            if has_punkt and has_punkt_tab:
+                self._sent_tokenize = nltk.sent_tokenize
+            else:
+                # Minimal fallback: naive sentence split on periods
+                self._sent_tokenize = lambda t: [s.strip() for s in t.split(".") if s.strip()]
         except Exception:  # pragma: no cover - fallback
             # Minimal fallback: naive sentence split on periods
             self._sent_tokenize = lambda t: [s.strip() for s in t.split(".") if s.strip()]
 
     def chunk(self, text: str, *, max_tokens: int = 512, overlap: int = 50) -> list[str]:
-        sentences = self._sent_tokenize(text)
+        # Tokenize into sentences with safe fallback
+        try:
+            sentences = self._sent_tokenize(text)
+        except Exception:
+            sentences = [s.strip() for s in text.split(".") if s.strip()]
         if not sentences:
             return []
 
