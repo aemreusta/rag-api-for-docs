@@ -7,11 +7,11 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.dedup import ContentDeduplicator
+from app.core.dedup import ChunkInput, ContentDeduplicator
 from app.core.embeddings import get_embedding_model
 from app.core.ingestion import NLTKAdaptiveChunker
 from app.core.logging_config import get_logger
-from app.db.models import ContentEmbedding, Document
+from app.db.models import ContentEmbedding, Document, DocumentChunk
 
 
 @dataclass(frozen=True)
@@ -144,7 +144,58 @@ class IncrementalProcessor:
             page_texts={p: new_page_texts.get(p, "") for p in changes.changed_pages},
             source_document=source_document,
         )
+        # 4) Upsert chunks for changed pages (acceptance: inserts for new, updates for changed)
+        try:
+            dedup = ContentDeduplicator()
+            for page in changes.changed_pages:
+                text = new_page_texts.get(page, "")
+                if not text:
+                    continue
+                prepared = self._prepare_chunk_inputs(
+                    db=db, document_id=document_id, page_number=page, text=text
+                )
+                if prepared:
+                    dedup.upsert_chunks(db, document_id=document_id, chunks=prepared)
+        except Exception:
+            # Defensive: chunk upsert failures shouldn't break re-embedding path
+            pass
         # Dedup already handled version/hash; no direct doc mutation here
+
+    def _prepare_chunk_inputs(
+        self, *, db: Session, document_id: str, page_number: int, text: str
+    ) -> list[ChunkInput]:
+        """Chunk page text and map to stable indices based on existing rows.
+
+        Strategy:
+        - Enumerate new chunks for the page
+        - Fetch existing chunks for (document_id, page_number) ordered by index
+        - Assign existing indices to the first N new chunks
+        - If more new chunks than existing, append with next indices (inserts)
+        - If fewer new chunks than existing, do not delete extras
+        """
+        new_chunks = self._chunker.chunk(text)
+        if not new_chunks:
+            return []
+        existing = (
+            db.query(DocumentChunk)
+            .filter(
+                DocumentChunk.document_id == document_id,
+                DocumentChunk.page_number == page_number,
+            )
+            .order_by(DocumentChunk.chunk_index.asc())
+            .all()
+        )
+        prepared: list[ChunkInput] = []
+        for i, content in enumerate(new_chunks):
+            if i < len(existing):
+                idx = existing[i].chunk_index
+            else:
+                last_idx = existing[-1].chunk_index if existing else -1
+                idx = last_idx + 1 + (i - len(existing))
+            prepared.append(
+                ChunkInput(index=idx, content=content, page_number=page_number, extra_metadata={})
+            )
+        return prepared
 
     def _reembed_pages(self, *, page_texts: Mapping[int, str], source_document: str) -> None:
         """Chunk and embed provided page texts, storing vectors via PGVectorStore.
