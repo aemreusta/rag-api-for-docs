@@ -628,3 +628,54 @@ vector_metrics = VectorSearchMetrics()
 def get_metrics_backend() -> VectorSearchMetrics:
     """Get the default metrics backend instance."""
     return vector_metrics
+
+
+class IngestionMetrics:
+    """High-level ingestion metrics helper with sane names/labels.
+
+    Provides a consistent API for:
+    - Request counting and latency for ingest endpoints
+    - Background job durations and outcomes
+    - Page/chunk level processing statistics
+    - Embedding timings (reuses embedding_latency_seconds)
+    """
+
+    def __init__(self, backend: MetricsBackend | None = None):
+        self._backend = backend or vector_metrics.backend
+
+    # Request-level
+    def record_ingest_request(self, *, status: str, duration_seconds: float | None = None) -> None:
+        self._backend.increment_counter("ingest_requests_total", {"status": status})
+        if duration_seconds is not None:
+            self._backend.record_histogram(
+                "ingest_latency_seconds", duration_seconds, {"status": status}
+            )
+
+    # Embedding timings
+    def record_embedding_latency(self, *, stage: str, duration_seconds: float) -> None:
+        self._backend.record_histogram(
+            "embedding_latency_seconds", duration_seconds, {"stage": stage}
+        )
+
+    # Job-level
+    def record_job_duration(self, *, job_type: str, status: str, duration_seconds: float) -> None:
+        # Use a generic histogram via record_histogram with a composed name to avoid schema churn
+        metric_name = "ingest_job_duration_seconds"
+        self._backend.record_histogram(
+            metric_name, duration_seconds, {"job_type": job_type, "status": status}
+        )
+
+    def increment_job_counter(self, *, job_type: str, status: str) -> None:
+        metric_name = "ingest_jobs_total"
+        self._backend.increment_counter(metric_name, {"job_type": job_type, "status": status})
+
+    # Page/chunk processing
+    def increment_pages_processed(self, *, status: str, count: int = 1) -> None:
+        self._backend.increment("ingest_pages_processed_total", {"status": status}, value=count)
+
+    def increment_chunks_processed(self, *, status: str, count: int = 1) -> None:
+        self._backend.increment("ingest_chunks_processed_total", {"status": status}, value=count)
+
+    # Expose underlying generic helpers if needed
+    def backend(self) -> MetricsBackend:
+        return self._backend

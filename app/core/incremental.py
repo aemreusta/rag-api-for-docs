@@ -147,17 +147,39 @@ class IncrementalProcessor:
         from time import time
 
         t0 = time()
-        self._reembed_pages(
-            page_texts={p: new_page_texts.get(p, "") for p in changes.changed_pages},
-            source_document=source_document,
-        )
+        page_text_map = {p: new_page_texts.get(p, "") for p in changes.changed_pages}
+        self._reembed_pages(page_texts=page_text_map, source_document=source_document)
         self._metrics.record_histogram(
             "embedding_latency_seconds", time() - t0, {"stage": "incremental_reembed"}
         )
+        # Also record page counters when we have texts
+        pages_count = sum(1 for _, txt in page_text_map.items() if (txt or "").strip())
+        if pages_count:
+            from app.core.metrics import IngestionMetrics
+
+            ingest_metrics = IngestionMetrics(self._metrics.backend)
+            ingest_metrics.increment_pages_processed(status="reembed", count=pages_count)
         # 4) Upsert chunks for changed pages (acceptance: inserts for new, updates for changed)
+        self._upsert_changed_page_chunks(
+            db=db,
+            document_id=document_id,
+            changed_pages=changes.changed_pages,
+            new_page_texts=new_page_texts,
+        )
+        # Dedup already handled version/hash; no direct doc mutation here
+
+    def _upsert_changed_page_chunks(
+        self,
+        *,
+        db: Session,
+        document_id: str,
+        changed_pages: list[int],
+        new_page_texts: Mapping[int, str],
+    ) -> None:
+        """Upsert chunks for changed pages with structured logging."""
         try:
             dedup = ContentDeduplicator()
-            for page in changes.changed_pages:
+            for page in changed_pages:
                 text = new_page_texts.get(page, "")
                 if not text:
                     continue
@@ -166,7 +188,6 @@ class IncrementalProcessor:
                 )
                 if prepared:
                     res = dedup.upsert_chunks(db, document_id=document_id, chunks=prepared)
-                    # Structured log with key fields
                     self._logger.info(
                         "chunks_upserted",
                         extra={
@@ -180,7 +201,6 @@ class IncrementalProcessor:
         except Exception:
             # Defensive: chunk upsert failures shouldn't break re-embedding path
             pass
-        # Dedup already handled version/hash; no direct doc mutation here
 
     def _prepare_chunk_inputs(
         self, *, db: Session, document_id: str, page_number: int, text: str
