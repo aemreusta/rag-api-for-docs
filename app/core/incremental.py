@@ -11,6 +11,7 @@ from app.core.dedup import ChunkInput, ContentDeduplicator
 from app.core.embeddings import get_embedding_model
 from app.core.ingestion import NLTKAdaptiveChunker
 from app.core.logging_config import get_logger
+from app.core.metrics import get_metrics_backend
 from app.db.models import ContentEmbedding, Document, DocumentChunk
 
 
@@ -43,6 +44,7 @@ class IncrementalProcessor:
     def __init__(self) -> None:
         self._logger = get_logger(__name__)
         self._chunker = NLTKAdaptiveChunker()
+        self._metrics = get_metrics_backend()
 
     def detect_changes(
         self,
@@ -140,9 +142,15 @@ class IncrementalProcessor:
         )
 
         # 3) Re-embed only changed pages
+        from time import time
+
+        t0 = time()
         self._reembed_pages(
             page_texts={p: new_page_texts.get(p, "") for p in changes.changed_pages},
             source_document=source_document,
+        )
+        self._metrics.record_histogram(
+            "embedding_latency_seconds", time() - t0, {"stage": "incremental_reembed"}
         )
         # 4) Upsert chunks for changed pages (acceptance: inserts for new, updates for changed)
         try:
@@ -155,7 +163,18 @@ class IncrementalProcessor:
                     db=db, document_id=document_id, page_number=page, text=text
                 )
                 if prepared:
-                    dedup.upsert_chunks(db, document_id=document_id, chunks=prepared)
+                    res = dedup.upsert_chunks(db, document_id=document_id, chunks=prepared)
+                    # Structured log with key fields
+                    self._logger.info(
+                        "chunks_upserted",
+                        extra={
+                            "document_id": document_id,
+                            "page_number": page,
+                            "inserted": res.get("inserted", 0),
+                            "updated": res.get("updated", 0),
+                            "unchanged": res.get("unchanged", 0),
+                        },
+                    )
         except Exception:
             # Defensive: chunk upsert failures shouldn't break re-embedding path
             pass

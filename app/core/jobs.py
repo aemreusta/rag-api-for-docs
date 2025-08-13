@@ -89,10 +89,8 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
         except Exception:
             file_text = ""
 
-        # Chunk
-        engine = IngestionEngine(processors=[], chunker=None)
-        # Use chunker directly to avoid requiring processors in v1
-        chunks = engine._chunker.chunk(file_text) if file_text else []  # type: ignore[attr-defined]
+        # Chunk using the same chunker as ingestion
+        chunks = IngestionEngine(processors=[])._chunker.chunk(file_text) if file_text else []  # type: ignore[attr-defined]
 
         # Upsert chunks
         dedup = ContentDeduplicator()

@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.logging_config import get_logger
+from app.core.metrics import get_metrics_backend
 from app.db.models import Document, DocumentChunk
 
 
@@ -38,6 +39,7 @@ class ContentDeduplicator:
 
     def __init__(self) -> None:
         self._logger = get_logger(__name__)
+        self._metrics = get_metrics_backend()
 
     # ----------------------------
     # Document-level
@@ -74,6 +76,7 @@ class ContentDeduplicator:
             self._logger.info(
                 "document_dedup_hit", document_id=existing_by_hash.id, storage_uri=storage_uri
             )
+            self._metrics.increment_counter("dedup_hits_total")
             return existing_by_hash, "existing"
 
         # 2) Same logical doc by storage_uri → bump version
@@ -98,6 +101,7 @@ class ContentDeduplicator:
                 document_id=existing_by_uri.id,
                 version=existing_by_uri.version,
             )
+            self._metrics.increment_counter("version_bumps_total")
             return existing_by_uri, "version_bumped"
 
         # 3) New document
@@ -120,6 +124,7 @@ class ContentDeduplicator:
         db.add(doc)
         db.commit()
         self._logger.info("document_created", document_id=doc.id, storage_uri=storage_uri)
+        self._metrics.increment_counter("documents_created_total")
         return doc, "created"
 
     # ----------------------------
@@ -176,4 +181,10 @@ class ContentDeduplicator:
                     updated += 1
 
         db.commit()
+        if inserted:
+            self._metrics.increment_counter("chunks_inserted_total")
+        if updated:
+            self._metrics.increment_counter("chunks_updated_total")
+        if unchanged:
+            self._metrics.increment_counter("chunks_unchanged_total")
         return {"inserted": inserted, "updated": updated, "unchanged": unchanged}
