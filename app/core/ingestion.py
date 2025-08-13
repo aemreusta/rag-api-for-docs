@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
+from app.core.config import settings
 from app.core.logging_config import get_logger
 
 # ----------------------------
@@ -69,7 +70,7 @@ class NLTKAdaptiveChunker:
     adjacent chunks to maintain context.
     """
 
-    def __init__(self, language: str = "english") -> None:
+    def __init__(self, language: str | None = None) -> None:
         try:
             import nltk
 
@@ -83,7 +84,8 @@ class NLTKAdaptiveChunker:
                 has_punkt = False
             try:
                 # Some newer nltk releases require punkt_tab as well
-                nltk.data.find(f"tokenizers/punkt_tab/{language}/")
+                lang = language or getattr(settings, "CHUNKER_LANGUAGE", "turkish")
+                nltk.data.find(f"tokenizers/punkt_tab/{lang}/")
                 has_punkt_tab = True
             except LookupError:
                 has_punkt_tab = False

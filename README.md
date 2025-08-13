@@ -145,6 +145,9 @@ make clickhouse-test      # One-shot smoke tests
 make clean             # Remove all containers, volumes, and images
 make clean-pyc         # Remove Python cache files
 make rebuild           # Rebuild with Docker build cache mounts (faster)
+# Turkish sentence tokenization for chunking
+# Configure NLTK language for AdaptiveChunker (defaults to turkish)
+# CHUNKER_LANGUAGE=turkish
 
 # Speed up Docker builds
 export DOCKER_BUILDKIT=1
