@@ -1,0 +1,26 @@
+---
+description: Makefile and CI standards. Provide deterministic, composable developer workflows and CI parity with local targets.
+globs: Makefile,.github/workflows/**/*.yml,.github/workflows/**/*.yaml
+alwaysApply: false
+---
+# Makefile & CI Standards
+
+## Makefile
+
+- **Phony targets**: Declare `.PHONY` for non-file targets.
+- **Deterministic**: Ensure targets are idempotent and do not depend on local state.
+- **Common targets**: `setup`, `lint`, `typecheck`, `test`, `format`, `build`, `run`, `docker-build`, `docker-run`.
+- **Env**: Do not hardcode secrets. Load from environment or `.env` (not committed).
+- **Help**: Provide a default help target that lists common tasks.
+- **Reuse**: CI should call these targets instead of duplicating logic.
+
+## CI (GitHub Actions or equivalent)
+
+- **Matrix**: Use minimal Python versions per `pyproject.toml` (3.11+).
+- **Caching**: Cache pip and build artifacts keyed by lockfiles or compiled requirement files.
+- **Steps**: `checkout`, `setup-python`, `install`, `lint`, `typecheck`, `test`, `build` (and image build on release branches/tags).
+- **Security**: Use OIDC for cloud auth. Least-privileged tokens. Do not echo secrets.
+- **Artifacts**: Upload relevant artifacts (coverage, dist wheels, SBOMs).
+- **Docker**: Build with Buildx, scan images, push on tag, sign if applicable.
+
+@Makefile
