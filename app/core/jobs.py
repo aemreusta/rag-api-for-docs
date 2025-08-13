@@ -17,6 +17,7 @@ from app.core.incremental import IncrementalProcessor
 from app.core.ingestion import NLTKAdaptiveChunker
 from app.core.logging_config import get_logger, set_request_id, set_trace_id, setup_logging
 from app.core.metadata import ChunkMetadataExtractor
+from app.core.storage import get_storage_backend
 from app.db.models import Document
 
 # Ensure logging is configured for workers
@@ -82,14 +83,10 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
         if not doc:
             return {"job_id": job_id, "status": "failed", "error": "document_not_found"}
 
-        # Fetch file contents from storage (local backend supports file://)
-        # For v1, assume local file path; real impl would use storage backend retrieve
+        # Fetch file contents using the configured storage backend
         try:
-            import urllib.parse
-            from pathlib import Path
-
-            path = Path(urllib.parse.urlparse(storage_uri or doc.storage_uri).path)
-            file_bytes = path.read_bytes()
+            backend = get_storage_backend()
+            file_bytes = backend.retrieve_file(storage_uri or doc.storage_uri)
             file_text = file_bytes.decode("utf-8", errors="ignore")
         except Exception:
             file_text = ""
