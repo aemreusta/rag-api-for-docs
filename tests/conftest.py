@@ -14,6 +14,15 @@ project_root = str(Path(__file__).parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+
+def pytest_configure(config):
+    """Register custom markers used across the test-suite."""
+    config.addinivalue_line(
+        "markers",
+        "integration: marks tests as integration tests that may require external services",
+    )
+
+
 # Path already configured above
 
 
