@@ -11,6 +11,9 @@ class StorageBackend(Protocol):
     def store_file(self, file_data: bytes, filename: str) -> str:
         """Store file and return a storage URI (e.g., file:///... or s3://...)."""
 
+    def retrieve_file(self, uri: str) -> bytes:
+        """Retrieve file bytes by storage URI."""
+
 
 class LocalStorageBackend:
     def __init__(self, base_dir: str | Path):
@@ -25,6 +28,14 @@ class LocalStorageBackend:
         uri = f"file://{path.resolve()}"
         self._logger.info("file_stored", uri=uri)
         return uri
+
+    def retrieve_file(self, uri: str) -> bytes:
+        # Expect file:// URI
+        from urllib.parse import urlparse
+
+        parsed = urlparse(uri)
+        path = Path(parsed.path)
+        return path.read_bytes()
 
 
 class MinIOStorageBackend:
@@ -60,6 +71,18 @@ class MinIOStorageBackend:
         uri = f"s3://{self._bucket}/{key}"
         self._logger.info("file_stored", uri=uri)
         return uri
+
+    def retrieve_file(self, uri: str) -> bytes:
+        # s3://bucket/key
+        from io import BytesIO
+        from urllib.parse import urlparse
+
+        parsed = urlparse(uri)
+        bucket = parsed.netloc or self._bucket
+        key = parsed.path.lstrip("/")
+        data = BytesIO()
+        self._client.get_object(bucket, key).readinto(data)  # pragma: no cover
+        return data.getvalue()
 
 
 def get_storage_backend() -> StorageBackend:
