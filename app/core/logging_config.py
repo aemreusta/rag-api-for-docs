@@ -16,8 +16,21 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
-import structlog
-from structlog.typing import EventDict, Processor
+try:  # Graceful fallback when structlog is not installed (e.g., minimal test envs)
+    import structlog  # type: ignore
+    from structlog.typing import EventDict, Processor  # type: ignore
+
+    _HAS_STRUCTLOG = True
+except Exception:  # pragma: no cover - fallback for limited environments
+    structlog = None  # type: ignore
+
+    class EventDict(dict):  # type: ignore
+        pass
+
+    class Processor:  # type: ignore
+        pass
+
+    _HAS_STRUCTLOG = False
 
 from app.core.config import settings
 
@@ -187,38 +200,42 @@ def setup_logging() -> None:
     log_file_path = getattr(settings, "LOG_FILE", None)
 
     # Configure processors based on output format
-    processors: list[Processor] = [
-        structlog.contextvars.merge_contextvars,
-        add_correlation_ids,
-        add_process_info,
-        mask_sensitive_data,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.StackInfoRenderer(),
-    ]
+    processors: list[Processor] = []
+    if _HAS_STRUCTLOG:
+        processors = [
+            structlog.contextvars.merge_contextvars,
+            add_correlation_ids,
+            add_process_info,
+            mask_sensitive_data,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.StackInfoRenderer(),
+        ]
 
-    if log_json:
-        processors.extend(
-            [structlog.processors.dict_tracebacks, structlog.processors.JSONRenderer()]
-        )
-    else:
-        processors.extend(
-            [
-                structlog.processors.ExceptionPrettyPrinter(),
-                structlog.dev.ConsoleRenderer(colors=True),
-            ]
-        )
+    if _HAS_STRUCTLOG:
+        if log_json:
+            processors.extend(
+                [structlog.processors.dict_tracebacks, structlog.processors.JSONRenderer()]
+            )
+        else:
+            processors.extend(
+                [
+                    structlog.processors.ExceptionPrettyPrinter(),
+                    structlog.dev.ConsoleRenderer(colors=True),
+                ]
+            )
 
     # Configure structlog
-    structlog.configure(
-        processors=processors,
-        wrapper_class=structlog.stdlib.BoundLogger,
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        context_class=dict,
-        cache_logger_on_first_use=True,
-    )
+    if _HAS_STRUCTLOG:
+        structlog.configure(
+            processors=processors,
+            wrapper_class=structlog.stdlib.BoundLogger,
+            logger_factory=structlog.stdlib.LoggerFactory(),
+            context_class=dict,
+            cache_logger_on_first_use=True,
+        )
 
     # Configure standard library logging
     handlers = []
@@ -279,7 +296,38 @@ def setup_logging() -> None:
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
-def get_logger(name: str = None) -> structlog.stdlib.BoundLogger:
+class _StdLoggerShim:
+    """Thin shim to emulate structlog-style logger interface on stdlib logger.
+
+    Accepts arbitrary keyword arguments and formats them into the message string.
+    """
+
+    def __init__(self, logger: logging.Logger):
+        self._logger = logger
+
+    def _fmt(self, msg: str, **kwargs) -> str:
+        if not kwargs:
+            return msg
+        kv = " ".join(f"{k}={v}" for k, v in kwargs.items())
+        return f"{msg} | {kv}"
+
+    def debug(self, msg: str, **kwargs) -> None:
+        self._logger.debug(self._fmt(msg, **kwargs))
+
+    def info(self, msg: str, **kwargs) -> None:
+        self._logger.info(self._fmt(msg, **kwargs))
+
+    def warning(self, msg: str, **kwargs) -> None:
+        self._logger.warning(self._fmt(msg, **kwargs))
+
+    def error(self, msg: str, **kwargs) -> None:
+        self._logger.error(self._fmt(msg, **kwargs))
+
+    def exception(self, msg: str, **kwargs) -> None:
+        self._logger.exception(self._fmt(msg, **kwargs))
+
+
+def get_logger(name: str = None):
     """
     Get a structured logger instance.
 
@@ -297,7 +345,10 @@ def get_logger(name: str = None) -> structlog.stdlib.BoundLogger:
         if frame and frame.f_back:
             name = frame.f_back.f_globals.get("__name__", "unknown")
 
-    return structlog.get_logger(name)
+    if _HAS_STRUCTLOG:
+        return structlog.get_logger(name)
+    # Fallback to stdlib logger with a shim that accepts structured kwargs
+    return _StdLoggerShim(logging.getLogger(name))
 
 
 def set_request_id(request_id: str = None) -> str:

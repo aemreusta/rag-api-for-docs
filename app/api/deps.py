@@ -1,7 +1,10 @@
 import sys
+from collections.abc import Generator
 
 from fastapi import HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
 from app.core.ratelimit import RateLimiter
@@ -49,3 +52,36 @@ async def rate_limit(request: Request):
 
     limiter = RateLimiter(redis_client)
     await limiter.check(request)
+
+
+# ----------------------------
+# Database session dependency
+# ----------------------------
+
+
+_engine = None
+_SessionLocal: sessionmaker | None = None
+
+
+def _get_engine():
+    global _engine, _SessionLocal
+    if _engine is None:
+        # Build from container-aware settings
+        db_url = (
+            f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@"
+            f"{settings.POSTGRES_SERVER}:5432/{settings.POSTGRES_DB}"
+        )
+        _engine = create_engine(db_url)
+        _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+    return _engine
+
+
+def get_db_session() -> Generator[Session, None, None]:
+    """Yield a SQLAlchemy Session for request scope."""
+    _get_engine()
+    assert _SessionLocal is not None
+    session: Session = _SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()

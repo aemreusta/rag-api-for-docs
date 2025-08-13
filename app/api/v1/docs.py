@@ -4,9 +4,12 @@ import uuid
 from dataclasses import asdict, dataclass
 from typing import Literal
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
+from app.api.deps import get_db_session
+from app.core.incremental import ChangeSet, IncrementalProcessor
 from app.core.logging_config import get_logger
 from app.core.metrics import get_metrics_backend
 from app.core.quality import QualityAssurance
@@ -107,3 +110,92 @@ async def scrape_url(payload: ScrapeRequest) -> ScrapeResponse:
     job_id = str(uuid.uuid4())
     # Real impl would enqueue scraping task; here we simulate accepted state
     return ScrapeResponse(id=job_id, url=payload.url, status="pending")
+
+
+# ----------------------------
+# Incremental update endpoints
+# ----------------------------
+
+
+class PageHashes(BaseModel):
+    pages: dict[int, str]
+
+
+class PageTexts(BaseModel):
+    pages: dict[int, str]
+
+
+class DetectChangesRequest(BaseModel):
+    document_id: str
+    new_content_hash: str
+    page_hashes: PageHashes | None = None
+
+
+class DetectChangesResponse(BaseModel):
+    is_new_version: bool
+    changed_pages: list[int]
+    reason: str | None = None
+
+
+DB_DEP_CHANGES: Session = Depends(get_db_session)
+
+
+@router.post("/detect-changes", response_model=DetectChangesResponse)
+async def detect_changes(
+    payload: DetectChangesRequest, db: Session = DB_DEP_CHANGES
+) -> DetectChangesResponse:
+    proc = IncrementalProcessor()
+    changes = proc.detect_changes(
+        db=db,
+        document_id=payload.document_id,
+        new_content_hash=payload.new_content_hash,
+        new_page_hashes=(payload.page_hashes.pages if payload.page_hashes else None),
+    )
+    return DetectChangesResponse(
+        is_new_version=changes.is_new_version,
+        changed_pages=changes.changed_pages,
+        reason=changes.reason,
+    )
+
+
+class ApplyChangesRequest(BaseModel):
+    document_id: str
+    changes: DetectChangesResponse
+    new_content_hash: str | None = None
+    page_texts: PageTexts
+
+
+class ApplyChangesResponse(BaseModel):
+    updated_pages: list[int]
+    version: int | None = None
+
+
+DB_DEP: Session = Depends(get_db_session)
+
+
+@router.put("/apply-changes", response_model=ApplyChangesResponse, status_code=200)
+async def apply_changes(payload: ApplyChangesRequest, db: Session = DB_DEP) -> ApplyChangesResponse:
+    proc = IncrementalProcessor()
+    # Convert response-model shape back into ChangeSet
+    change_set = ChangeSet(
+        is_new_version=payload.changes.is_new_version,
+        changed_pages=payload.changes.changed_pages,
+        reason=payload.changes.reason,
+    )
+    proc.process_incremental_update(
+        db=db,
+        document_id=payload.document_id,
+        changes=change_set,
+        new_content_hash=payload.new_content_hash,
+        new_page_texts=payload.page_texts.pages,
+    )
+    # Fetch version to report
+    from app.db.models import Document
+
+    version = None
+    try:
+        doc = db.get(Document, payload.document_id)
+        version = doc.version if doc else None
+    except Exception:
+        version = None
+    return ApplyChangesResponse(updated_pages=payload.changes.changed_pages, version=version)

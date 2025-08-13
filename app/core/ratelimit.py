@@ -1,6 +1,28 @@
 from __future__ import annotations
 
-import redis.asyncio as redis
+try:  # make redis optional for unit tests without services
+    import redis.asyncio as redis  # type: ignore
+except Exception:  # pragma: no cover
+
+    class _DummyRedis:  # type: ignore
+        class AuthenticationError(Exception): ...
+
+        class ConnectionError(Exception): ...
+
+        def pipeline(self):
+            class _Pipe:
+                def incr(self, key):
+                    return 1
+
+                def expire(self, key, window):
+                    return None
+
+                def execute(self):
+                    return [1]
+
+            return _Pipe()
+
+    redis = _DummyRedis()  # type: ignore
 from fastapi import HTTPException, Request
 from starlette import status
 
