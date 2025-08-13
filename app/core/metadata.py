@@ -31,7 +31,9 @@ def _is_likely_header(line: str) -> bool:
     # Outline style prefixes
     import re
 
-    outline_prefix = re.match(r"^(\d+(?:[.\)])(?:\d+[.\)])*\s+|[IVXLCM]+\.|[A-Z]\)\s+", candidate)
+    outline_prefix = re.match(
+        r"^(?:\d+(?:[.\)])(?:\d+[.\)])*\s+|[IVXLCM]+\.|[A-Z]\)\s+)", candidate
+    )
     if outline_prefix:
         return True
 
