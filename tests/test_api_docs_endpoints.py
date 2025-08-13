@@ -20,6 +20,22 @@ def test_upload_and_list_documents():
     assert any(item["id"] == doc["id"] for item in items)
 
 
+def test_upload_validation_rejects_large_file():
+    # Create a payload just over 10MB
+    too_big = b"x" * (10 * 1024 * 1024 + 1)
+    files = {"file": ("big.pdf", too_big, "application/pdf")}
+    r = client.post("/api/v1/docs/upload", files=files)
+    assert r.status_code == 400
+    assert "Invalid upload" in r.text
+
+
+def test_upload_validation_rejects_unsupported_type():
+    files = {"file": ("image.png", b"fake-bytes", "image/png")}
+    r = client.post("/api/v1/docs/upload", files=files)
+    assert r.status_code == 400
+    assert "Invalid upload" in r.text
+
+
 def test_get_document_and_status():
     # Upload first
     files = {"file": ("readme.md", b"content", "text/markdown")}

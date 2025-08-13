@@ -7,7 +7,13 @@ from typing import Literal
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from app.core.logging_config import get_logger
+from app.core.metrics import get_metrics_backend
+from app.core.quality import QualityAssurance
+
 router = APIRouter(prefix="/docs", tags=["Documents"])
+logger = get_logger(__name__)
+metrics = get_metrics_backend()
 
 
 # In-memory storage for prototype behavior (to be replaced by DB integration)
@@ -45,11 +51,22 @@ async def upload_document(file: UploadFile = UPLOAD_FILE_FORM) -> DocumentDetail
     if not file or not file.filename:
         raise HTTPException(status_code=400, detail="File is required")
 
+    # Basic validation
+    validation = await QualityAssurance.validate_upload(file)
+    if not validation.ok:
+        logger.info(
+            "upload_validation_failed",
+            extra={"filename": file.filename, "reason": validation.reason},
+        )
+        raise HTTPException(status_code=400, detail=f"Invalid upload: {validation.reason}")
+
     doc_id = str(uuid.uuid4())
     record = DocumentRecord(id=doc_id, filename=file.filename, status="pending")
     _DOCUMENTS[doc_id] = record
 
     # Note: Real implementation will persist file, enqueue job, and return job-aware status
+    metrics.increment_counter("vector_search_requests_total", {"status": "ingest"})
+    logger.info("upload_enqueued", extra={"doc_id": doc_id, "filename": file.filename})
     return DocumentDetail(**asdict(record))
 
 
