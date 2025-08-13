@@ -74,6 +74,8 @@ Browser → WP Script ↔ ai-gateway ↔ RAG API ↔ LLMs
 - **Flexible Monitoring:** ✅ **Multi-backend metrics** supporting Prometheus, DataDog, OpenTelemetry, and NoOp
 - **Model Flexibility:** Uses multiple LLM providers (Gemini, Llama 3, GPT) to optimize for cost and performance
 - **WordPress Integration:** Easy embedding via script or InsertChat plugin
+- **Pluggable Storage Backends:** Local filesystem and MinIO (S3-compatible); file I/O moved out of API path
+- **Ingest Caching Optimizations:** Content-hash keyed cache reuses storage URI for duplicate uploads (safe IO reduction)
 
 ## Tech Stack
 
@@ -311,6 +313,20 @@ echo "METRICS_BACKEND=auto" >> .env  # auto-detect available backend
 ```
 
 All other variables have sensible defaults for local development.
+
+#### Storage Configuration
+
+| Key | Sample value | Notes |
+|-----|--------------|------|
+| `STORAGE_BACKEND` | `local` | `local` or `minio` |
+| `UPLOADED_DOCS_DIR` | `uploaded_docs` | Base directory for local storage |
+| `MINIO_ENDPOINT` | `minio:9000` | MinIO server endpoint |
+| `MINIO_ACCESS_KEY` | `minioadmin` | Access key |
+| `MINIO_SECRET_KEY` | `miniosecret` | Secret key |
+| `MINIO_BUCKET` | `uploads` | Bucket to store files |
+| `MINIO_SECURE` | `false` | Use HTTPS to connect |
+
+Ingest caching is enabled automatically for duplicate uploads by content hash; no configuration required.
 
 ### 3. Add Your Documents
 
@@ -672,4 +688,4 @@ These topics help make the repository more discoverable for developers looking f
 
 ### Last Updated
 
-2025-06-27
+2025-08-13
