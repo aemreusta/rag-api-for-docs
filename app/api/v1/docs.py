@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -16,13 +15,13 @@ from app.core.incremental import ChangeSet, IncrementalProcessor
 from app.core.logging_config import get_logger
 from app.core.metrics import get_metrics_backend
 from app.core.quality import QualityAssurance
+from app.core.storage import get_storage_backend
 
 router = APIRouter(prefix="/docs", tags=["Documents"])
 logger = get_logger(__name__)
 metrics = get_metrics_backend()
 
-# Local upload directory (development prototype)
-UPLOAD_DIR = Path("uploaded_docs")
+storage = get_storage_backend()
 
 
 # In-memory storage for prototype behavior (to be replaced by DB integration)
@@ -79,18 +78,10 @@ async def upload_document(
         base = re.sub(r"[^A-Za-z0-9._-]", "_", name).strip("._-") or "upload"
         return base[:200]
 
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     payload = await file.read()
     content_hash = compute_sha256_hex(payload)
     safe_name = _safe_filename(file.filename)
-    file_path = UPLOAD_DIR / safe_name
-    try:
-        file_path.write_bytes(payload)
-    except Exception:
-        # If write fails, continue with dedup only
-        pass
-
-    storage_uri = f"file://{file_path.resolve()}"
+    storage_uri = storage.store_file(payload, safe_name)
     dedup = ContentDeduplicator()
     doc, _ = dedup.upsert_document_by_hash(
         db,
