@@ -1,0 +1,14 @@
+---
+description: LLM router standards. Ensure deterministic routing, safe fallbacks, and structured logging/metrics.
+globs: app/core/llm_router.py,app/core/query_engine.py,app/**/*.py
+alwaysApply: false
+---
+# LLM Router Standards
+
+- **Deterministic Routing**: Keep clear rules for provider/model selection. Guard against None/empty inputs.
+- **Fallbacks**: Provide safe fallbacks if a provider is unavailable. Document backoff/retry strategy.
+- **Telemetry**: Log routing decisions and emit metrics for latency and error rate per provider.
+- **Cost Awareness**: Prefer cheaper models for low-risk paths; escalate only when needed.
+
+@app/core/llm_router.py
+@app/core/query_engine.py

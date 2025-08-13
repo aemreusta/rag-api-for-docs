@@ -1,0 +1,23 @@
+---
+description: FastAPI API design and validation standards for `app/api/`. Enforce typed endpoints, robust error handling, and secure request processing.
+globs: app/api/**/*.py
+alwaysApply: false
+---
+# FastAPI API Standards
+
+- **Routers**: Use `APIRouter` with clear prefixes and `tags` per domain.
+- **Schemas**: Define request/response models under `app/schemas/`. Use `response_model` and explicit return types.
+- **Validation**: Prefer precise Pydantic types. Avoid `dict[str, Any]` in handlers.
+- **Dependencies**: Use shared dependencies from `app/api/deps.py` for DB sessions, auth, and config.
+- **Errors**: Use `HTTPException` with appropriate status codes. Do not return error dicts directly.
+- **Security**: Validate and sanitize external inputs. Never log secrets or PII.
+- **OpenAPI**: Keep concise `summary` and `description`. Ensure models are documented and reusable.
+- **Streaming**: If streaming responses, set proper media type and ensure backpressure-aware iteration.
+- **Observability**: Log structured events and instrument latency/error metrics around handlers.
+
+@app/api/deps.py
+@app/api/v1/chat.py
+@app/api/v1/docs.py
+@app/api/v1/models.py
+@app/api/v1/status.py
+@app/schemas/

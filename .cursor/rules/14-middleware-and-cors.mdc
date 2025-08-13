@@ -1,0 +1,15 @@
+---
+description: Middleware and CORS standards. Centralize cross-cutting concerns and keep CORS tight.
+globs: app/core/middleware.py,app/core/cors.py,app/main.py
+alwaysApply: false
+---
+# Middleware & CORS
+
+- **Centralization**: Add middleware in `app/core/middleware.py`. Keep `app/main.py` thin.
+- **CORS**: Configure allowed origins, methods, and headers via `app/core/cors.py`. Avoid `*` in production.
+- **Order**: Ensure middleware order is correct, especially for CORS, auth, and compression.
+- **Observability**: Add request/response logging at appropriate levels without leaking PII.
+
+@app/core/middleware.py
+@app/core/cors.py
+@app/main.py

@@ -1,0 +1,16 @@
+---
+description: Ingestion engine standards for PDF/text processing, chunking, and embedding. Emphasize idempotency and robustness.
+globs: app/core/ingestion.py,scripts/ingest.py,scripts/ingest_simple.py,app/**/*.py,scripts/**/*.py
+alwaysApply: false
+---
+# Ingestion Standards
+
+- **Idempotency**: Ensure re-running ingestion does not duplicate records. Use stable keys.
+- **Resilience**: Handle parsing errors gracefully. Skip bad documents; continue processing.
+- **Chunking**: Use adaptive chunking where appropriate. Keep consistent chunk metadata.
+- **Embeddings**: Respect provider limits and batch sizes. Retry with backoff on transient failures.
+- **Observability**: Emit per-document metrics and structured logs.
+
+@app/core/ingestion.py
+@scripts/ingest.py
+@scripts/ingest_simple.py
