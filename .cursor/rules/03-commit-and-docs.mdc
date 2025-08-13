@@ -1,6 +1,6 @@
 ---
-description: Rules for generating Conventional Commits and maintaining documentation.
-globs: 
+description: Conventional Commit guidance and documentation standards. Ensure traceable history and up-to-date docs/diagrams for significant changes.
+globs: docs/**,**/*.md,docs/diagrams/**/*.mmd
 alwaysApply: false
 ---
 
@@ -14,7 +14,14 @@ When asked for a commit message, you MUST use the **Conventional Commits** speci
 - Example: `feat(api): add endpoint for chat query processing`
 - Scope should be a specific part of the app, e.g., `api`, `core`, `db`, `schemas`, `scripts`.
 
+- Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+- Keep subjects imperative and <= 72 chars. Provide meaningful body when needed.
+
 ## Documentation
 
 - If you change a significant piece of logic, suggest updating the relevant documentation in the `docs/` directory.
 - For architectural changes, mention that a Mermaid diagram (`.mmd`) in `docs/diagrams/` may need to be updated.
+- If you introduce new environment variables or config, update `README.md` and `docs/` accordingly.
+
+@docs/
+@README.md

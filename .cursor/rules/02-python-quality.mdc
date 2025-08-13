@@ -1,5 +1,5 @@
 ---
-description: 
+description: Python quality gate and static analysis guidance (Ruff, MyPy). Ensures type-safety, formatting, and defensive coding across Python files.
 globs: **/*.py
 alwaysApply: false
 ---
@@ -68,3 +68,11 @@ def get_name(data: dict) -> str | None:
 - If a line is close to 100 characters, wrap proactively to avoid `E501`.
 - Avoid adding TODO comments; implement the change or create an issue instead.
 - Write clean, idiomatic Python (f-strings, comprehensions when clear, explicit types for public APIs).
+
+## 4. MyPy Configuration Alignment
+
+- Match types and options configured in `pyproject.toml`.
+- Use precise types for public functions and avoid `Any` in signatures.
+- Prefer `TypedDict`, `Protocol`, and generics when modeling structured data.
+
+@pyproject.toml

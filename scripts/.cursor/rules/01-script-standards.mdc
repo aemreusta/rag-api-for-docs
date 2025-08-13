@@ -1,5 +1,5 @@
 ---
-description: Script-specific quality rules enforced for files under scripts/
+description: Script-specific quality rules for `scripts/`. Enforce defensive coding, reliability, and strict linting for standalone tools.
 globs: scripts/**/*.py
 alwaysApply: false
 ---
@@ -46,3 +46,5 @@ error-prone. You must follow the strictest possible interpretation of our Python
 - **Line length**: 100 characters (Ruff `E501`). Wrap long calls/arguments and keep
   comments/docstrings within 100 chars.
 - Use double quotes and maintain import order per Ruff (isort via Ruff `I`).
+
+@pyproject.toml
