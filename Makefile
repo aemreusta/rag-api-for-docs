@@ -1,4 +1,4 @@
-.PHONY: help build up down logs shell test test-all test-pgvector test-performance test-cov lint format clean rebuild env-generate-secrets env-rotate-secrets env-lockdown env-set-retention logs-all
+.PHONY: help build up down logs shell test test-all test-pgvector test-performance test-cov lint format clean rebuild env-generate-secrets env-rotate-secrets env-lockdown env-set-retention logs-all docker-build docker-run docker-scan docker-sbom docker-health hadolint
 
 help: ## Show this help message
 	@echo 'Usage:'
@@ -139,6 +139,24 @@ rebuild: ## Rebuild all Docker images without cache
 
 rebuild-app: ## Rebuild only the app service
 	DOCKER_BUILDKIT=1 docker compose build --no-cache app
+
+docker-build: ## Build production image with BuildKit/Buildx
+	DOCKER_BUILDKIT=1 docker build -t chatbot-api-service:local .
+
+docker-run: ## Run the production image locally
+	docker run --rm -p 8000:8000 --env-file .env chatbot-api-service:local
+
+docker-health: ## Show container health status from compose
+	docker compose ps --format '{{.Name}}\t{{.State}}\t{{.Health}}'
+
+hadolint: ## Lint Dockerfile with Hadolint (if installed)
+	hadolint Dockerfile || echo "Hadolint not installed or lint failed"
+
+docker-scan: ## Scan image for vulnerabilities (requires docker scan or trivy)
+	(docker scan chatbot-api-service:local || true) || (trivy image --exit-code 0 chatbot-api-service:local || true)
+
+docker-sbom: ## Generate SBOM for the image (requires syft)
+	syft packages chatbot-api-service:local -o json > sbom.json || echo "Syft not installed; skipped"
 
 ## Health Checks
 health-check: ## Run comprehensive health checks
