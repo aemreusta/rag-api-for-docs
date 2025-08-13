@@ -279,7 +279,7 @@ services:
       - API_BASE_URL=http://host.docker.internal:18000
       - API_KEY=${API_KEY}
     depends_on:
-      app: {condition: service_started}
+      app: {condition: service_healthy}
     networks: [app-network]
 
   # ───────────────────────────── Celery background workers ──────────────────────────────
@@ -291,6 +291,7 @@ services:
       - ./app:/app/app
       - ./pdf_documents:/app/pdf_documents
     depends_on:
+      app: {condition: service_healthy}
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
     networks: [app-network]
@@ -302,5 +303,6 @@ services:
     volumes:
       - ./app:/app/app
     depends_on:
+      app: {condition: service_healthy}
       redis: {condition: service_healthy}
     networks: [app-network]
