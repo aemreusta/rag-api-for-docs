@@ -59,3 +59,8 @@ tag_format = "v$version"
 version_scheme = "semver"
 update_changelog_on_bump = true
 changelog_file = "CHANGELOG.md"
+
+[tool.pytest.ini_options]
+markers = [
+  "integration: marks tests as integration tests that may require external services (deselect with '-m \"not integration\"')",
+]
