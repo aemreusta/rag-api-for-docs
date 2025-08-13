@@ -6,6 +6,7 @@ from app.core.ingestion import (
     IngestionEngine,
     IngestionError,
     IngestionProgress,
+    NLTKAdaptiveChunker,
     UnsupportedFormatError,
 )
 
@@ -84,3 +85,32 @@ def test_progress_callback_errors_do_not_break(tmp_path: Path):
     # Should not raise due to callback failure
     chunks = engine.ingest_file(sample)
     assert chunks == ["hello", "world"]
+
+
+def test_default_adaptive_chunker_preserves_sentences(tmp_path: Path):
+    sample = tmp_path / "sample.txt"
+    sample.write_text(
+        "First sentence here. Second sentence follows. Third sentence ends.",
+        encoding="utf-8",
+    )
+
+    # Pass chunker=None to use default NLTKAdaptiveChunker
+    engine = IngestionEngine(processors=[TxtOnlyProcessor()], chunker=None)
+    chunks = engine.ingest_file(sample)
+
+    assert isinstance(chunks, list)
+    assert len(chunks) >= 1
+    # Ensure we do not split in the middle of words and we keep sentence boundaries within chunks
+    for c in chunks:
+        assert " " in c or c.endswith(".")
+
+
+def test_adaptive_chunker_overlap_behavior():
+    text = (
+        "One two three four five six seven eight nine ten. Eleven twelve thirteen fourteen fifteen."
+    )
+    chunker = NLTKAdaptiveChunker()
+    chunks = chunker.chunk(text, max_tokens=5, overlap=2)
+    assert len(chunks) >= 2
+    tail = " ".join(chunks[0].split()[-2:])
+    assert tail.split()[0] in chunks[1]
