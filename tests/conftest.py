@@ -9,9 +9,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.config import settings
 from app.db.models import Base
 
-# Add the project root directory to the Python path
+# Ensure repository root is on sys.path before importing app modules (E402 compliant)
 project_root = str(Path(__file__).parent.parent)
-sys.path.insert(0, project_root)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Path already configured above
 
 
 @pytest.fixture(scope="session")

@@ -19,15 +19,46 @@ from collections.abc import AsyncGenerator
 from enum import Enum
 from typing import Any
 
-import redis
-from groq import AsyncGroq
+try:
+    import redis  # type: ignore
+
+    _HAS_REDIS = True
+except Exception:  # pragma: no cover
+    redis = None  # type: ignore
+    _HAS_REDIS = False
+try:
+    from groq import AsyncGroq  # type: ignore
+
+    _HAS_GROQ = True
+except Exception:  # pragma: no cover
+    AsyncGroq = None  # type: ignore
+    _HAS_GROQ = False
 from groq.types.chat import ChatCompletionChunk
 from llama_index.core.base.llms.types import ChatMessage, CompletionResponse
 from llama_index.core.llms import LLMMetadata
 from llama_index.core.llms.custom import CustomLLM
-from llama_index.llms.google_genai import GoogleGenAI as Gemini
-from llama_index.llms.openai import OpenAI
-from llama_index.llms.openrouter import OpenRouter
+
+try:
+    from llama_index.llms.google_genai import GoogleGenAI as Gemini  # type: ignore
+
+    _HAS_GEMINI = True
+except Exception:  # pragma: no cover
+    Gemini = None  # type: ignore
+    _HAS_GEMINI = False
+try:
+    from llama_index.llms.openai import OpenAI  # type: ignore
+
+    _HAS_OPENAI = True
+except Exception:  # pragma: no cover
+    OpenAI = None  # type: ignore
+    _HAS_OPENAI = False
+try:
+    from llama_index.llms.openrouter import OpenRouter  # type: ignore
+
+    _HAS_OPENROUTER = True
+except Exception:  # pragma: no cover
+    OpenRouter = None  # type: ignore
+    _HAS_OPENROUTER = False
 from pydantic import PrivateAttr
 
 from app.core.config import settings
@@ -133,13 +164,13 @@ class OpenRouterProvider(LLMProvider):
         }
         self.model_name = alias_map.get(model_name, model_name)
 
-        if self.is_available():
+        if self.is_available() and _HAS_OPENROUTER:
             self.client = OpenRouter(
                 api_key=settings.OPENROUTER_API_KEY, model=self.model_name, timeout=timeout_seconds
             )
 
     def is_available(self) -> bool:
-        return bool(settings.OPENROUTER_API_KEY)
+        return bool(settings.OPENROUTER_API_KEY) and _HAS_OPENROUTER
 
     async def complete(self, messages: list[ChatMessage], **kwargs) -> CompletionResponse:
         try:
@@ -187,7 +218,7 @@ class GroqProvider(LLMProvider):
         super().__init__(ProviderType.GROQ, timeout)
         self.model_name = settings.GROQ_MODEL_NAME
 
-        if self.is_available():
+        if self.is_available() and _HAS_GROQ:
             self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
 
         # Initialize Redis client for quota sharing
@@ -200,7 +231,7 @@ class GroqProvider(LLMProvider):
             self.redis_client = None
 
     def is_available(self) -> bool:
-        return bool(settings.GROQ_API_KEY)
+        return bool(settings.GROQ_API_KEY) and _HAS_GROQ
 
     def _parse_rate_limit_headers(self, response_headers: dict) -> dict:
         """Parse Groq rate limit headers into structured data."""
@@ -640,13 +671,13 @@ class OpenAIProvider(LLMProvider):
     def __init__(self, timeout_seconds: int = 30):
         super().__init__(ProviderType.OPENAI, timeout_seconds)
         self.model_name = "gpt-3.5-turbo"
-        if self.is_available():
+        if self.is_available() and _HAS_OPENAI:
             self.client = OpenAI(
                 api_key=settings.OPENAI_API_KEY, model=self.model_name, timeout=timeout_seconds
             )
 
     def is_available(self) -> bool:
-        return bool(settings.OPENAI_API_KEY)
+        return bool(settings.OPENAI_API_KEY) and _HAS_OPENAI
 
     async def complete(self, messages: list[ChatMessage] | str, **kwargs) -> CompletionResponse:
         messages = self._ensure_messages(messages)
@@ -695,19 +726,19 @@ class GoogleAIStudioProvider(LLMProvider):
         super().__init__(ProviderType.GOOGLE, timeout_seconds)
         self.model_name = settings.GOOGLE_MODEL_NAME
         # Only construct client when both key and model name are valid strings
-        if self.is_available():
+        if self.is_available() and _HAS_GEMINI:
             try:
                 self.client = Gemini(
                     api_key=settings.GOOGLE_AI_STUDIO_API_KEY, model=self.model_name
                 )
             except Exception as e:
-                # Defer availability if SDK rejects model/key types
                 self.logger.warning("Failed to initialize Google Gemini client", error=str(e))
                 self.client = None
 
     def is_available(self) -> bool:
         return (
-            isinstance(settings.GOOGLE_AI_STUDIO_API_KEY, str)
+            _HAS_GEMINI
+            and isinstance(settings.GOOGLE_AI_STUDIO_API_KEY, str)
             and bool(settings.GOOGLE_AI_STUDIO_API_KEY)
             and isinstance(self.model_name, str)
         )
@@ -815,9 +846,12 @@ class LLMRouter(CustomLLM):
 
         # Initialize Redis client for caching failed providers
         try:
-            self._redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
-            self._redis_client.ping()  # Test connection
-            logger.info("Redis connection established for LLM Router")
+            if _HAS_REDIS:
+                self._redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+                self._redis_client.ping()  # Test connection
+                logger.info("Redis connection established for LLM Router")
+            else:
+                self._redis_client = None
         except Exception as e:
             logger.error("Failed to connect to Redis for LLM Router", error=str(e))
             self._redis_client = None

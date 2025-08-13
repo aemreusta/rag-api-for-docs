@@ -17,12 +17,23 @@ from abc import ABC, abstractmethod
 from functools import wraps
 from typing import Any
 
-import structlog
+try:
+    import structlog  # type: ignore
+
+    _HAS_STRUCTLOG = True
+except Exception:  # pragma: no cover
+    structlog = None  # type: ignore
+    _HAS_STRUCTLOG = False
 
 from app.core.config import settings
 from app.core.metrics import get_metrics_backend
 
-logger = structlog.get_logger(__name__)
+if _HAS_STRUCTLOG:
+    logger = structlog.get_logger(__name__)
+else:
+    import logging
+
+    logger = logging.getLogger(__name__)
 metrics = get_metrics_backend()
 
 
