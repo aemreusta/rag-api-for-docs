@@ -29,3 +29,4 @@ python-multipart
 pypdf
 redis
 celery
+nltk

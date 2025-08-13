@@ -3,6 +3,8 @@ description:
 globs: 
 alwaysApply: true
 ---
+- # Global Rules
+
 - **Respect Tooling**: Follow repository tooling as the single source of truth.
 - **Python Version**: Target Python 3.11+ (per `pyproject.toml`).
 - **Clarity and Simplicity**: Write code that is clear, simple, and easy to understand. Favor readability over overly clever constructs.
