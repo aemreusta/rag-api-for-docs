@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_session
+from app.core.dedup import compute_sha256_hex
 from app.core.incremental import ChangeSet, IncrementalProcessor
 from app.core.logging_config import get_logger
 from app.core.metrics import get_metrics_backend
@@ -63,6 +64,9 @@ async def upload_document(file: UploadFile = UPLOAD_FILE_FORM) -> DocumentDetail
         )
         raise HTTPException(status_code=400, detail=f"Invalid upload: {validation.reason}")
 
+    # Prototype: compute content hash and register via deduplicator (no storage write yet)
+    _ = compute_sha256_hex(await file.read())
+    # In a real impl, call ContentDeduplicator.upsert_document_by_hash with a DB session.
     doc_id = str(uuid.uuid4())
     record = DocumentRecord(id=doc_id, filename=file.filename, status="pending")
     _DOCUMENTS[doc_id] = record

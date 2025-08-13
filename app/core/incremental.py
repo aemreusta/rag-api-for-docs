@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.dedup import ContentDeduplicator
 from app.core.embeddings import get_embedding_model
 from app.core.ingestion import NLTKAdaptiveChunker
 from app.core.logging_config import get_logger
@@ -106,8 +107,29 @@ class IncrementalProcessor:
         if new_page_texts is None:
             raise ValueError("new_page_texts is required for selective re-embedding")
 
-        # 1) Delete existing vectors for changed pages
+        # 1) Document-level dedup/versioning
         source_document = document.filename or document.original_filename or document.id
+        if new_content_hash:
+            try:
+                # Use existing document attributes to drive dedup/version bump
+                dedup = ContentDeduplicator()
+                _doc, _action = dedup.upsert_document_by_hash(
+                    db,
+                    filename=document.filename,
+                    storage_uri=document.storage_uri,
+                    mime_type=document.mime_type,
+                    file_size=document.file_size,
+                    page_count=document.page_count,
+                    new_content_hash=new_content_hash,
+                    language=document.language or "en",
+                    created_by=document.created_by,
+                    tags=getattr(document, "tags", None),
+                )
+            except Exception:
+                # Defensive: proceed even if dedup path fails
+                pass
+
+        # 2) Delete existing vectors for changed pages
         (
             db.query(ContentEmbedding)
             .filter(
@@ -117,19 +139,12 @@ class IncrementalProcessor:
             .delete(synchronize_session=False)
         )
 
-        # 2) Re-embed only changed pages
+        # 3) Re-embed only changed pages
         self._reembed_pages(
             page_texts={p: new_page_texts.get(p, "") for p in changes.changed_pages},
             source_document=source_document,
         )
-
-        # 3) Bump version and update hashes/metadata
-        if changes.is_new_version:
-            document.version = (document.version or 0) + 1
-        if new_content_hash:
-            document.content_hash = new_content_hash
-        db.add(document)
-        db.commit()
+        # Dedup already handled version/hash; no direct doc mutation here
 
     def _reembed_pages(self, *, page_texts: Mapping[int, str], source_document: str) -> None:
         """Chunk and embed provided page texts, storing vectors via PGVectorStore.

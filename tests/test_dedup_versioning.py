@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.core.dedup import ChunkInput, ContentDeduplicator, compute_sha256_hex
-from app.db.models import Document
+from app.db.models import Document, DocumentChunk
 
 
 def test_document_dedup_and_version_bump(db_session: Session):
@@ -92,3 +92,14 @@ def test_chunk_upsert_insert_update_unchanged(db_session: Session):
         ],
     )
     assert res2 == {"inserted": 0, "updated": 1, "unchanged": 1}
+
+    # Verify database state matches expectations
+    rows = (
+        db_session.query(DocumentChunk)
+        .filter(DocumentChunk.document_id == doc.id)
+        .order_by(DocumentChunk.chunk_index)
+        .all()
+    )
+    assert len(rows) == 2
+    assert rows[0].content == "hello"
+    assert rows[1].content == "WORLD"
