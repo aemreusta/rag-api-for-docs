@@ -16,9 +16,6 @@ cp .env.example .env
 # Start the complete system
 make up
 
-# Run initial data ingestion (one-time setup)
-make ingest
-
 # Verify system health
 curl http://localhost:8000/health
 ```
@@ -76,6 +73,7 @@ Browser → WP Script ↔ ai-gateway ↔ RAG API ↔ LLMs
 - **WordPress Integration:** Easy embedding via script or InsertChat plugin
 - **Pluggable Storage Backends:** Local filesystem and MinIO (S3-compatible); file I/O moved out of API path
 - **Ingest Caching Optimizations:** Content-hash keyed cache reuses storage URI for duplicate uploads (safe IO reduction)
+- **Migration Support:** Temporary parallel ingest deployment via `INGEST_PARALLEL_DEPLOYMENT=true` and runbook in `docs/ops/parallel_ingest_runbook.md`
 
 ## Tech Stack
 
@@ -136,7 +134,7 @@ make chat                 # Test local chat endpoint with curl
 ```bash
 make db-shell             # Open PostgreSQL shell
 make db-status            # Database & pgvector status information
-make ingest               # Run data ingestion (index PDF documents)
+# Use API `/api/v1/docs/upload` for ingestion via the new pipeline
 make clickhouse-reset     # Drop OLAP volume (dev only)
 make clickhouse-test      # One-shot smoke tests
 ```
@@ -199,8 +197,6 @@ ai-gateway/
 │   └── main.py                  # Application entry point
 │
 ├── scripts/                     # Utility scripts
-│   ├── ingest.py                # Data ingestion with Langfuse
-│   ├── ingest_simple.py         # Simplified ingestion  
 │   ├── create_sample_pdf.py     # Generate test documents
 │   └── run_baseline_evaluation.py  # Performance evaluation
 │

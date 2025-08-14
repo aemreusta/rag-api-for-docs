@@ -98,8 +98,7 @@ migrate: ## Run database migrations
 migrate-create: ## Create a new migration
 	docker compose exec app alembic revision --autogenerate -m "$(name)"
 
-ingest: ## Run data ingestion (one-time setup)
-	docker compose exec app python scripts/ingest_simple.py
+# ingest: removed (legacy scripts deleted)
 
 ## Dependencies
 deps-compile: ## Compile development dependencies (single source of truth)

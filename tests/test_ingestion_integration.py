@@ -115,16 +115,8 @@ def check_environment_variables():
 
 def run_ingestion_test():
     """Run the actual ingestion script."""
-    try:
-        logger.info("🚀 Running ingestion script...")
-        from scripts.ingest import main
-
-        main()
-        logger.info("✅ Ingestion completed successfully")
-        return True
-    except Exception as e:
-        logger.error(f"❌ Ingestion failed: {e}")
-        return False
+    logger.info("ℹ️ Legacy ingestion script removed; skipping legacy ingest run.")
+    return True
 
 
 def check_data_ingestion():
@@ -151,7 +143,7 @@ def check_data_ingestion():
 
         if row_count == 0:
             logger.warning("⚠️  content_embeddings table exists but is empty")
-            logger.info("   Run 'make ingest' to populate the database")
+            logger.info("   Use API '/api/v1/docs/upload' to populate the database")
             conn.close()
             return False
 

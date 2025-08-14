@@ -11,8 +11,12 @@ client = TestClient(app)
 
 def test_upload_and_list_documents():
     # Upload a fake file (mock storage backend to avoid filesystem writes)
-    with patch("app.api.v1.docs.storage") as mock_storage:
+    with (
+        patch("app.api.v1.docs.storage") as mock_storage,
+        patch("app.api.v1.docs.ContentDeduplicator.upsert_document_by_hash") as mock_upsert,
+    ):
         mock_storage.store_file.return_value = "file:///tmp/uploaded_docs/sample.txt"
+        mock_upsert.return_value = (SimpleNamespace(id="doc-1"), "created")
         files = {"file": ("sample.txt", b"hello-unique", "text/plain")}
         r = client.post("/api/v1/docs/upload", files=files)
     assert r.status_code == 201
@@ -102,7 +106,9 @@ def test_upload_uses_storage_cache_by_content_hash():
     with (
         patch("app.api.v1.docs.get_cache_backend", return_value=fake_cache),
         patch("app.api.v1.docs.storage") as mock_storage,
+        patch("app.api.v1.docs.ContentDeduplicator.upsert_document_by_hash") as mock_upsert,
     ):
+        mock_upsert.return_value = (SimpleNamespace(id="doc-cache"), "created")
         mock_storage.store_file.return_value = "file:///tmp/uploaded_docs/sample.txt"
         files = {"file": ("cached.txt", b"same-bytes", "text/plain")}
         # First upload should call storage and populate cache
@@ -134,8 +140,10 @@ def test_upload_validation_rejects_unsupported_type():
 
 def test_get_document_and_status():
     # Upload first
-    files = {"file": ("readme.md", b"content", "text/markdown")}
-    r = client.post("/api/v1/docs/upload", files=files)
+    with patch("app.api.v1.docs.ContentDeduplicator.upsert_document_by_hash") as mock_upsert:
+        mock_upsert.return_value = (SimpleNamespace(id="doc-xyz"), "created")
+        files = {"file": ("readme.md", b"content", "text/markdown")}
+        r = client.post("/api/v1/docs/upload", files=files)
     assert r.status_code == 201
     doc = r.json()
 

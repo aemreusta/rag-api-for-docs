@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import uuid
+from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_db_session
@@ -18,6 +18,7 @@ def test_detect_changes_document_not_found():
         "new_content_hash": "abc123",
         "page_hashes": None,
     }
+
     r = client.post("/api/v1/docs/detect-changes", json=payload)
     assert r.status_code == 200
     body = r.json()
@@ -26,10 +27,16 @@ def test_detect_changes_document_not_found():
     assert body["reason"] == "document_not_found"
 
 
-@pytest.mark.skip(reason="Requires live Celery; endpoint shape covered by happy-path below")
 def test_jobs_status_shape():
+    class DummyAsyncResult:
+        def __init__(self, state: str, info: dict | None = None):
+            self.state = state
+            self.info = info
+
     job_id = str(uuid.uuid4())
-    r = client.get(f"/api/v1/docs/jobs/{job_id}")
+    with patch("app.api.v1.docs.celery_app") as mock_celery:
+        mock_celery.AsyncResult.return_value = DummyAsyncResult("PENDING")
+        r = client.get(f"/api/v1/docs/jobs/{job_id}")
     assert r.status_code == 200
     body = r.json()
     assert set(body.keys()) == {"id", "status", "detail"}
