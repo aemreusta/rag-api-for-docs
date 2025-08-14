@@ -17,7 +17,7 @@ from app.core.logging_config import get_logger
 from app.core.metrics import get_metrics_backend
 from app.core.quality import QualityAssurance
 from app.core.storage import get_storage_backend
-from app.db.models import Document
+from app.db.models import Document, DocumentStatusEnum
 
 router = APIRouter(
     prefix="/docs", tags=["Documents"], responses={404: {"description": "Not found"}}
@@ -121,7 +121,7 @@ async def upload_document(
     try:
         db_doc = db.get(Document, doc.id)
         if db_doc:
-            db_doc.status = "processing"  # type: ignore[assignment]
+            db_doc.status = DocumentStatusEnum.PROCESSING  # type: ignore[assignment]
             db.commit()
     except Exception:
         pass
@@ -148,9 +148,24 @@ DB_DEP_LIST: Session = Depends(get_db_session)
     summary="List documents",
     response_description="Summary list of documents",
 )
+def _status_literal(s: object) -> str:
+    try:
+        if isinstance(s, DocumentStatusEnum):
+            return s.value
+        txt = str(s)
+        if txt.startswith("DocumentStatusEnum."):
+            return txt.split(".", 1)[1].lower()
+        return txt.lower()
+    except Exception:
+        return "pending"
+
+
 async def list_documents(db: Session = DB_DEP_LIST) -> list[DocumentSummary]:
     rows = db.query(Document).all()
-    return [DocumentSummary(id=r.id, filename=r.filename, status=str(r.status)) for r in rows]
+    return [
+        DocumentSummary(id=r.id, filename=r.filename, status=_status_literal(r.status))
+        for r in rows
+    ]
 
 
 DB_DEP_GET: Session = Depends(get_db_session)
@@ -167,7 +182,7 @@ async def get_document(doc_id: str, db: Session = DB_DEP_GET) -> DocumentDetail:
     r = db.get(Document, doc_id)
     if r is None:
         raise HTTPException(status_code=404, detail="Document not found")
-    return DocumentDetail(id=r.id, filename=r.filename, status=str(r.status))
+    return DocumentDetail(id=r.id, filename=r.filename, status=_status_literal(r.status))
 
 
 DB_DEP_STATUS: Session = Depends(get_db_session)
@@ -184,7 +199,7 @@ async def get_document_status(doc_id: str, db: Session = DB_DEP_STATUS) -> Docum
     r = db.get(Document, doc_id)
     if r is None:
         raise HTTPException(status_code=404, detail="Document not found")
-    return DocumentStatus(id=r.id, status=str(r.status))
+    return DocumentStatus(id=r.id, status=_status_literal(r.status))
 
 
 # Optional endpoint: URL scraping prototype

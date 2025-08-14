@@ -143,7 +143,9 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
         try:
             db_doc = session.get(Document, doc.id)
             if db_doc:
-                db_doc.status = "completed"  # type: ignore[assignment]
+                from app.db.models import DocumentStatusEnum
+
+                db_doc.status = DocumentStatusEnum.COMPLETED  # type: ignore[assignment]
         except Exception:
             pass
         session.commit()
