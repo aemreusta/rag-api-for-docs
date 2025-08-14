@@ -74,6 +74,11 @@ def _sanitize_text(text: str) -> str:
 
 
 def main():
+    if not settings.INGEST_PARALLEL_DEPLOYMENT:
+        logger.warning(
+            "Legacy ingest path is deprecated. Use /api/v1/docs endpoints. "
+            "Set INGEST_PARALLEL_DEPLOYMENT=true to run in dual mode during migration."
+        )
     logger.info("Starting simplified data ingestion process...")
 
     # Verify pgvector extension is enabled

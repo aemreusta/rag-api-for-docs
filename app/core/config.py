@@ -85,6 +85,8 @@ class Settings(BaseSettings):
 
     # Ingestion / Chunking
     CHUNKER_LANGUAGE: str = "turkish"  # Language for sentence tokenization (NLTK)
+    # Migration flags
+    INGEST_PARALLEL_DEPLOYMENT: bool = False  # Dual-run: legacy scripts + new API
 
     @computed_field
     @property

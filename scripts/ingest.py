@@ -49,6 +49,11 @@ PDF_DIRECTORY = "pdf_documents/"
 
 
 def main():
+    if not settings.INGEST_PARALLEL_DEPLOYMENT:
+        logger.warning(
+            "Legacy ingest path is deprecated. Use /api/v1/docs endpoints. "
+            "Set INGEST_PARALLEL_DEPLOYMENT=true to run in dual mode during migration."
+        )
     # --- Langfuse Setup ---
     langfuse_handler = LlamaIndexCallbackHandler(
         public_key=settings.LANGFUSE_PUBLIC_KEY,
