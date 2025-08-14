@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 import uuid
-from dataclasses import asdict, dataclass
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -18,6 +17,7 @@ from app.core.logging_config import get_logger
 from app.core.metrics import get_metrics_backend
 from app.core.quality import QualityAssurance
 from app.core.storage import get_storage_backend
+from app.db.models import Document
 
 router = APIRouter(
     prefix="/docs", tags=["Documents"], responses={404: {"description": "Not found"}}
@@ -28,15 +28,7 @@ metrics = get_metrics_backend()
 storage = get_storage_backend()
 
 
-# In-memory storage for prototype behavior (to be replaced by DB integration)
-@dataclass
-class DocumentRecord:
-    id: str
-    filename: str
-    status: Literal["pending", "processing", "completed", "failed"] = "pending"
-
-
-_DOCUMENTS: dict[str, DocumentRecord] = {}
+# Remove in-memory storage; use DB-backed status
 
 
 class DocumentSummary(BaseModel):
@@ -125,9 +117,14 @@ async def upload_document(
         new_content_hash=content_hash,
     )
 
-    # Bridge to prototype in-memory tracking using DB document id
-    record = DocumentRecord(id=doc.id, filename=file.filename, status="pending")
-    _DOCUMENTS[doc.id] = record
+    # Update DB-backed status to processing immediately after enqueue
+    try:
+        db_doc = db.get(Document, doc.id)
+        if db_doc:
+            db_doc.status = "processing"  # type: ignore[assignment]
+            db.commit()
+    except Exception:
+        pass
 
     # Enqueue background processing
     try:
@@ -139,7 +136,10 @@ async def upload_document(
     except Exception:
         logger.warning("failed_to_enqueue_background_job", extra={"doc_id": doc.id})
     metrics.increment_counter("vector_search_requests_total", {"status": "ingest"})
-    return DocumentDetail(**asdict(record))
+    return DocumentDetail(id=doc.id, filename=file.filename, status="processing")
+
+
+DB_DEP_LIST: Session = Depends(get_db_session)
 
 
 @router.get(
@@ -148,8 +148,12 @@ async def upload_document(
     summary="List documents",
     response_description="Summary list of documents",
 )
-async def list_documents() -> list[DocumentSummary]:
-    return [DocumentSummary(**asdict(r)) for r in _DOCUMENTS.values()]
+async def list_documents(db: Session = DB_DEP_LIST) -> list[DocumentSummary]:
+    rows = db.query(Document).all()
+    return [DocumentSummary(id=r.id, filename=r.filename, status=str(r.status)) for r in rows]
+
+
+DB_DEP_GET: Session = Depends(get_db_session)
 
 
 @router.get(
@@ -159,11 +163,14 @@ async def list_documents() -> list[DocumentSummary]:
     response_description="Document details",
     description="Get document metadata by id.",
 )
-async def get_document(doc_id: str) -> DocumentDetail:
-    record = _DOCUMENTS.get(doc_id)
-    if record is None:
+async def get_document(doc_id: str, db: Session = DB_DEP_GET) -> DocumentDetail:
+    r = db.get(Document, doc_id)
+    if r is None:
         raise HTTPException(status_code=404, detail="Document not found")
-    return DocumentDetail(**asdict(record))
+    return DocumentDetail(id=r.id, filename=r.filename, status=str(r.status))
+
+
+DB_DEP_STATUS: Session = Depends(get_db_session)
 
 
 @router.get(
@@ -173,11 +180,11 @@ async def get_document(doc_id: str) -> DocumentDetail:
     response_description="Document status",
     description="Get ingestion status of a document by id.",
 )
-async def get_document_status(doc_id: str) -> DocumentStatus:
-    record = _DOCUMENTS.get(doc_id)
-    if record is None:
+async def get_document_status(doc_id: str, db: Session = DB_DEP_STATUS) -> DocumentStatus:
+    r = db.get(Document, doc_id)
+    if r is None:
         raise HTTPException(status_code=404, detail="Document not found")
-    return DocumentStatus(id=record.id, status=record.status)
+    return DocumentStatus(id=r.id, status=str(r.status))
 
 
 # Optional endpoint: URL scraping prototype

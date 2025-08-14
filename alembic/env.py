@@ -1,8 +1,10 @@
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
+from app.core.config import settings
 
 # Import your Base from your models file
 from app.db.models import Base
@@ -11,8 +13,22 @@ from app.db.models import Base
 # access to the values within the .ini file in use.
 config = context.config
 
-# Force the database URL to be used directly
-config.set_main_option("sqlalchemy.url", "postgresql://postgres:postgres@postgres:5432/app")
+# Resolve database URL for both local and container runs
+# Priority: ALEMBIC_DATABASE_URL env → settings.DATABASE_URL env → compose POSTGRES_*
+alembic_url = (
+    os.getenv("ALEMBIC_DATABASE_URL")
+    or os.getenv("DATABASE_URL")
+    or getattr(settings, "DATABASE_URL", None)
+)
+if not alembic_url:
+    # Construct from individual POSTGRES_* settings
+    user = os.getenv("POSTGRES_USER", settings.POSTGRES_USER)
+    password = os.getenv("POSTGRES_PASSWORD", settings.POSTGRES_PASSWORD)
+    host = os.getenv("POSTGRES_SERVER", settings.POSTGRES_SERVER)
+    db = os.getenv("POSTGRES_DB", settings.POSTGRES_DB)
+    alembic_url = f"postgresql://{user}:{password}@{host}:5432/{db}"
+
+config.set_main_option("sqlalchemy.url", alembic_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

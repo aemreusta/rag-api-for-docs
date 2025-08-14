@@ -269,6 +269,18 @@ class IncrementalProcessor:
         from llama_index.vector_stores.postgres import PGVectorStore
 
         embedder = get_embedding_model()
+        try:
+            self._logger.info(
+                "embedding_provider_selected",
+                extra={
+                    "provider": type(embedder).__name__,
+                    "model": getattr(embedder, "model_name", getattr(embedder, "model", None)),
+                    "dim": getattr(embedder, "embed_dim", None)
+                    or getattr(embedder, "dimensions", None),
+                },
+            )
+        except Exception:
+            pass
         node_parser = SentenceSplitter(chunk_size=512, chunk_overlap=20)
 
         # Construct documents per page to preserve page_number metadata

@@ -13,6 +13,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 from app.core.dedup import ContentDeduplicator
+from app.core.embeddings import get_embedding_model
 from app.core.incremental import IncrementalProcessor
 from app.core.ingestion import NLTKAdaptiveChunker
 from app.core.logging_config import get_logger, set_request_id, set_trace_id, setup_logging
@@ -121,9 +122,30 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
             )
 
         # Embed changed content via incremental processor
+        # Log embedding provider/model for observability
+        try:
+            embedder = get_embedding_model()
+            logger.info(
+                "embedding_provider_selected",
+                extra={
+                    "provider": type(embedder).__name__,
+                    "model": getattr(embedder, "model_name", getattr(embedder, "model", None)),
+                    "dim": getattr(embedder, "embed_dim", None)
+                    or getattr(embedder, "dimensions", None),
+                },
+            )
+        except Exception:
+            pass
         proc = IncrementalProcessor()
         proc._reembed_pages(page_texts={1: file_text}, source_document=doc.filename)  # type: ignore[attr-defined]
 
+        # Mark document completed
+        try:
+            db_doc = session.get(Document, doc.id)
+            if db_doc:
+                db_doc.status = "completed"  # type: ignore[assignment]
+        except Exception:
+            pass
         session.commit()
         return {"job_id": job_id, "status": "completed", "document_id": doc.id}
     except Exception as e:
