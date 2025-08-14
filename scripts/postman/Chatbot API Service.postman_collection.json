@@ -116,6 +116,113 @@
       ]
     },
     {
+      "name": "Ingestion",
+      "item": [
+        {
+          "name": "Upload Document",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "{{upload_file_path}}" }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/docs/upload",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "docs", "upload"]
+            }
+          }
+        },
+        {
+          "name": "List Documents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/docs",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "docs"]
+            }
+          }
+        },
+        {
+          "name": "Get Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/docs/{{doc_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "docs", "{{doc_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Document Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/docs/status/{{doc_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "docs", "status", "{{doc_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Detect Changes",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"{{doc_id}}\",\n  \"new_content_hash\": \"{{new_content_hash}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/docs/detect-changes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "docs", "detect-changes"]
+            }
+          }
+        },
+        {
+          "name": "Apply Changes",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"{{doc_id}}\",\n  \"changes\": {\n    \"is_new_version\": true,\n    \"changed_pages\": [1]\n  },\n  \"new_content_hash\": \"{{new_content_hash}}\",\n  \"page_texts\": {\n    \"pages\": {\n      \"1\": \"Updated text for page 1\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/docs/apply-changes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "docs", "apply-changes"]
+            }
+          }
+        },
+        {
+          "name": "Job Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/docs/jobs/{{job_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "docs", "jobs", "{{job_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Chat",
       "request": {
         "method": "POST",
