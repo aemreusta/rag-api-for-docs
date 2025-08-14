@@ -76,6 +76,7 @@ Browser → WP Script ↔ ai-gateway ↔ RAG API ↔ LLMs
 - **WordPress Integration:** Easy embedding via script or InsertChat plugin
 - **Pluggable Storage Backends:** Local filesystem and MinIO (S3-compatible); file I/O moved out of API path
 - **Ingest Caching Optimizations:** Content-hash keyed cache reuses storage URI for duplicate uploads (safe IO reduction)
+- **Migration Support:** Temporary parallel ingest deployment via `INGEST_PARALLEL_DEPLOYMENT=true` and runbook in `docs/ops/parallel_ingest_runbook.md`
 
 ## Tech Stack
 
