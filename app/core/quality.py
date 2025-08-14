@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from math import isfinite
+
+try:
+    import magic
+
+    MAGIC_AVAILABLE = True
+except ImportError:
+    MAGIC_AVAILABLE = False
 
 from fastapi import UploadFile
 from sqlalchemy import text
@@ -22,10 +30,191 @@ ALLOWED_MIME_TYPES: set[str] = {
 MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024  # 10 MB
 
 
+def _detect_mime_by_extension(filename: str) -> str | None:
+    """Detect MIME type based on file extension (fallback when magic unavailable)."""
+    extension_map = {
+        ".pdf": "application/pdf",
+        ".txt": "text/plain",
+        ".md": "text/markdown",
+        ".markdown": "text/markdown",
+    }
+
+    for ext, mime_type in extension_map.items():
+        if filename.lower().endswith(ext):
+            return mime_type
+
+    return None
+
+
+def _is_mime_compatible(declared: str, detected: str) -> bool:
+    """Check if declared and detected MIME types are compatible.
+
+    Some MIME type variations are acceptable (e.g., text/plain vs text/markdown).
+    """
+    # Exact match
+    if declared == detected:
+        return True
+
+    # Known compatible combinations
+    compatible_pairs = {
+        ("text/plain", "text/markdown"),
+        ("text/markdown", "text/plain"),
+        # Add more as needed
+    }
+
+    return (declared, detected) in compatible_pairs
+
+
+def _validate_filename(file: UploadFile) -> ValidationResult:
+    """Validate file presence and filename safety."""
+    if file is None or not file.filename:
+        return ValidationResult(False, "file_missing")
+
+    filename = file.filename.strip()
+    if not filename or len(filename) > 255 or ".." in filename:
+        logger.warning(
+            "upload_validation_rejected",
+            extra={"filename": file.filename, "reason": "invalid_filename"},
+        )
+        return ValidationResult(False, "invalid_filename")
+
+    return ValidationResult(True)
+
+
+async def _read_and_validate_content(file: UploadFile, filename: str) -> ValidationResult:
+    """Read file content and validate size constraints."""
+    content_chunks = []
+    size_read = 0
+    chunk_size = 512 * 1024  # 512KB
+    hash_obj = hashlib.sha256()
+
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+
+        content_chunks.append(chunk)
+        hash_obj.update(chunk)
+        size_read += len(chunk)
+
+        # Early size rejection
+        if size_read > MAX_FILE_SIZE_BYTES:
+            logger.info(
+                "upload_validation_rejected",
+                extra={"filename": filename, "size_bytes": size_read, "reason": "too_large"},
+            )
+            await file.seek(0)
+            return ValidationResult(False, "too_large", file_size_bytes=size_read)
+
+    content_hash = hash_obj.hexdigest()
+
+    # Minimum size check (empty files)
+    if size_read == 0:
+        logger.info(
+            "upload_validation_rejected",
+            extra={"filename": filename, "reason": "empty_file"},
+        )
+        await file.seek(0)
+        return ValidationResult(False, "empty_file", content_hash=content_hash)
+
+    # Return content info in ValidationResult fields
+    return ValidationResult(
+        True,
+        reason=content_chunks,  # Use reason field to pass content_chunks
+        content_hash=content_hash,
+        file_size_bytes=size_read,
+    )
+
+
+def _validate_mime_types(
+    file: UploadFile, filename: str, content_chunks: list, content_hash: str, size_read: int
+) -> ValidationResult:
+    """Validate MIME types with strict enforcement."""
+    declared_mime = (file.content_type or "").lower().strip()
+
+    # Detect actual MIME type from content (if magic library available)
+    detected_mime = None
+    if MAGIC_AVAILABLE:
+        full_content = b"".join(content_chunks)
+        try:
+            detected_mime = magic.from_buffer(full_content, mime=True).lower()
+        except Exception as e:
+            logger.warning("mime_detection_failed", extra={"filename": filename, "error": str(e)})
+            detected_mime = None
+    else:
+        # Fallback: basic file extension to MIME type mapping
+        detected_mime = _detect_mime_by_extension(filename)
+
+    # Strict MIME type enforcement
+    if declared_mime and declared_mime not in ALLOWED_MIME_TYPES:
+        logger.info(
+            "upload_validation_rejected",
+            extra={
+                "filename": filename,
+                "declared_mime": declared_mime,
+                "reason": "unsupported_declared_type",
+            },
+        )
+        return ValidationResult(
+            False,
+            "unsupported_declared_type",
+            content_hash=content_hash,
+            detected_mime_type=detected_mime,
+            file_size_bytes=size_read,
+        )
+
+    if detected_mime and detected_mime not in ALLOWED_MIME_TYPES:
+        logger.warning(
+            "upload_validation_rejected",
+            extra={
+                "filename": filename,
+                "declared_mime": declared_mime,
+                "detected_mime": detected_mime,
+                "reason": "unsupported_detected_type",
+            },
+        )
+        return ValidationResult(
+            False,
+            "unsupported_detected_type",
+            content_hash=content_hash,
+            detected_mime_type=detected_mime,
+            file_size_bytes=size_read,
+        )
+
+    # MIME type mismatch detection (security)
+    if (
+        declared_mime
+        and detected_mime
+        and declared_mime != detected_mime
+        and not _is_mime_compatible(declared_mime, detected_mime)
+    ):
+        logger.warning(
+            "upload_validation_rejected",
+            extra={
+                "filename": filename,
+                "declared_mime": declared_mime,
+                "detected_mime": detected_mime,
+                "reason": "mime_mismatch",
+            },
+        )
+        return ValidationResult(
+            False,
+            "mime_mismatch",
+            content_hash=content_hash,
+            detected_mime_type=detected_mime,
+            file_size_bytes=size_read,
+        )
+
+    return ValidationResult(True, detected_mime_type=detected_mime)
+
+
 @dataclass(frozen=True)
 class ValidationResult:
     ok: bool
     reason: str | None = None
+    content_hash: str | None = None
+    detected_mime_type: str | None = None
+    file_size_bytes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -52,53 +241,49 @@ class QualityAssurance:
 
     @staticmethod
     async def validate_upload(file: UploadFile) -> ValidationResult:
-        """Validate uploaded file for basic constraints.
+        """Validate uploaded file with comprehensive checks and early checksum computation."""
+        # Basic file presence and filename validation
+        filename_result = _validate_filename(file)
+        if not filename_result.ok:
+            return filename_result
 
-        Checks:
-        - non-empty filename
-        - allowed MIME types (best-effort based on provided content_type)
-        - size limit (reads stream in controlled chunks)
-        """
-        if file is None or not file.filename:
-            return ValidationResult(False, "file_missing")
+        filename = file.filename.strip()
 
-        # MIME type check (best-effort; still re-check server-side when parsing)
-        content_type = (file.content_type or "").lower()
-        if content_type and content_type not in ALLOWED_MIME_TYPES:
-            logger.info(
-                "upload_validation_rejected",
-                extra={"filename": file.filename, "content_type": content_type},
-            )
-            return ValidationResult(False, "unsupported_type")
+        # Read and validate file content
+        content_result = await _read_and_validate_content(file, filename)
+        if not content_result.ok:
+            return content_result
 
-        # Size check: stream-read to avoid loading entire file in memory
-        size_read = 0
-        chunk_size = 512 * 1024  # 512KB
-        while True:
-            chunk = await file.read(chunk_size)
-            if not chunk:
-                break
-            size_read += len(chunk)
-            if size_read > MAX_FILE_SIZE_BYTES:
-                logger.info(
-                    "upload_validation_rejected",
-                    extra={"filename": file.filename, "size_bytes": size_read},
-                )
-                await file.seek(0)
-                return ValidationResult(False, "too_large")
+        content_hash, size_read, content_chunks = (
+            content_result.content_hash,
+            content_result.file_size_bytes,
+            content_result.reason,
+        )
 
-        # rewind for downstream consumers
+        # MIME type validation
+        mime_result = _validate_mime_types(file, filename, content_chunks, content_hash, size_read)
+        if not mime_result.ok:
+            return mime_result
+
+        # Success - rewind file for downstream use
         await file.seek(0)
-
         logger.info(
             "upload_validation_passed",
             extra={
-                "filename": file.filename,
-                "content_type": content_type,
+                "filename": filename,
+                "declared_mime": (file.content_type or "").lower().strip(),
+                "detected_mime": mime_result.detected_mime_type,
                 "size_bytes": size_read,
+                "content_hash": content_hash[:12] + "...",
             },
         )
-        return ValidationResult(True)
+
+        return ValidationResult(
+            True,
+            content_hash=content_hash,
+            detected_mime_type=mime_result.detected_mime_type,
+            file_size_bytes=size_read,
+        )
 
     @staticmethod
     def score_content_quality(content: str) -> QualityScore:
