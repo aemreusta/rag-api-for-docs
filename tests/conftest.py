@@ -79,3 +79,33 @@ def db_session(db_engine) -> Generator[Session, None, None]:
         yield session
     finally:
         session.close()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _setup_db_schema(db_engine):
+    """Ensure core tables and extensions exist for API integration tests.
+
+    This runs once per test session so endpoints using the default
+    `get_db_session` dependency can operate against real tables without
+    per-test overrides.
+    """
+    # Ensure pgvector extension is available
+    with db_engine.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+        conn.commit()
+    # Create ORM tables (idempotent)
+    Base.metadata.create_all(bind=db_engine)
+    # Ensure HNSW index exists and tune ef_search for recall in tests
+    with db_engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS content_embeddings_vector_hnsw_idx
+                ON content_embeddings
+                USING hnsw (content_vector vector_l2_ops)
+                WITH (m = 32, ef_construction = 64);
+                """
+            )
+        )
+        conn.execute(text("SET hnsw.ef_search = 100;"))
+        conn.commit()

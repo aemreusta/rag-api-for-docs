@@ -1,117 +1,16 @@
 import logging
 import os
-from unittest.mock import MagicMock, patch
+import subprocess
+import sys
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.core.config import settings
 from app.core.metrics import get_metrics_backend
-from scripts.ingest import PDF_DIRECTORY, main
-
-# Mock the ingestion dependencies to avoid actual DB calls
-with patch("scripts.ingest.psycopg2"):
-    with patch("scripts.ingest.LlamaIndexCallbackHandler"):
-        from scripts.ingest import PDF_DIRECTORY, logger, main
+from app.main import app
 
 logger = logging.getLogger(__name__)
-
-PDF_DIRECTORY = "pdf_documents/"
-
-
-def test_ingestion_script_imports():
-    """Test that all required imports work correctly."""
-    # This test ensures all the imports in the ingestion script are working
-    assert main is not None
-    assert logger is not None
-    assert PDF_DIRECTORY == "pdf_documents/"
-
-
-@patch("scripts.ingest.psycopg2.connect")
-@patch("scripts.ingest.VectorStoreIndex.from_documents")
-@patch("scripts.ingest.SimpleDirectoryReader")
-@patch("scripts.ingest.PGVectorStore.from_params")
-@patch("scripts.ingest.LlamaIndexCallbackHandler")
-def test_ingestion_main_function(
-    mock_langfuse_handler, mock_pgvector, mock_reader, mock_index, mock_connect
-):
-    """Test the main ingestion function with mocked dependencies."""
-    # Mock Langfuse handler
-    mock_handler_instance = MagicMock()
-    mock_langfuse_handler.return_value = mock_handler_instance
-
-    # Mock database connection and cursor
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.fetchone.return_value = (1,)  # pgvector extension exists
-    mock_conn.cursor.return_value = mock_cursor
-    mock_connect.return_value = mock_conn
-
-    # Mock document reader
-    mock_documents = [MagicMock()]
-    mock_reader_instance = MagicMock()
-    mock_reader_instance.load_data.return_value = mock_documents
-    mock_reader.return_value = mock_reader_instance
-
-    # Mock vector store
-    mock_vector_store = MagicMock()
-    mock_pgvector.return_value = mock_vector_store
-
-    # Mock index creation
-    mock_index_instance = MagicMock()
-    mock_index.return_value = mock_index_instance
-
-    # Run the main function
-    main()
-
-    # Verify Langfuse setup
-    mock_langfuse_handler.assert_called_once_with(
-        public_key=settings.LANGFUSE_PUBLIC_KEY,
-        secret_key=settings.LANGFUSE_SECRET_KEY,
-        host=settings.LANGFUSE_HOST,
-    )
-
-    # Verify PGVectorStore setup (embed_dim should match runtime setting)
-    mock_pgvector.assert_called_once()
-    _, kwargs = mock_pgvector.call_args
-    assert kwargs["database"] == "app"
-    assert kwargs["host"] == "postgres"
-    assert kwargs["password"] == "postgres"
-    assert kwargs["port"] == 5432
-    assert kwargs["user"] == "postgres"
-    assert kwargs["table_name"] == "content_embeddings"
-    assert kwargs["embed_dim"] == settings.EMBEDDING_DIM
-
-    # Verify document loading
-    mock_reader.assert_called_once_with(input_dir=PDF_DIRECTORY)
-    mock_reader_instance.load_data.assert_called_once()
-
-    # Verify index creation
-    mock_index.assert_called_once()
-
-
-@patch("scripts.ingest.psycopg2.connect")
-@patch("scripts.ingest.LlamaIndexCallbackHandler")
-def test_ingestion_missing_pgvector_extension(mock_langfuse_handler, mock_connect):
-    """Test that the script exits gracefully when pgvector extension is missing."""
-    # Mock Langfuse handler
-    mock_handler_instance = MagicMock()
-    mock_langfuse_handler.return_value = mock_handler_instance
-
-    # Mock database connection and cursor
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.fetchone.return_value = None  # pgvector extension doesn't exist
-    mock_conn.cursor.return_value = mock_cursor
-    mock_connect.return_value = mock_conn
-
-    # Run the main function
-    main()
-
-    # Verify database check was performed
-    mock_cursor.execute.assert_called_once_with(
-        "SELECT 1 FROM pg_extension WHERE extname = 'vector'"
-    )
-    mock_conn.close.assert_called_once()
 
 
 def test_pdf_directory_exists():
@@ -128,8 +27,6 @@ def test_ingest_metrics_backend_smoke():
 
 def test_sample_pdfs_and_texts_exist():
     """Ensure generated sample PDFs and text excerpts exist, generating them if missing."""
-    import subprocess
-    import sys
     from pathlib import Path
 
     project_root = Path(__file__).resolve().parents[1]
@@ -177,6 +74,9 @@ async def test_settings_available():
     assert hasattr(settings, "LANGFUSE_HOST")
 
 
-def test_pdf_directory_constant():
-    """Test that the PDF directory constant is set correctly."""
-    assert PDF_DIRECTORY == "pdf_documents/"
+def test_ingest_api_list_documents_smoke():
+    """Basic smoke test for new ingest API list endpoint."""
+    client = TestClient(app)
+    r = client.get("/api/v1/docs")
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)

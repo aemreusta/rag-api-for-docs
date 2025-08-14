@@ -18,6 +18,7 @@ def test_detect_changes_document_not_found():
         "new_content_hash": "abc123",
         "page_hashes": None,
     }
+
     r = client.post("/api/v1/docs/detect-changes", json=payload)
     assert r.status_code == 200
     body = r.json()
