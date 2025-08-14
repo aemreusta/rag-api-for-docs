@@ -20,7 +20,7 @@ This runbook describes how to run the legacy ingestion scripts side-by-side with
 
 ## Execution paths
 
-- Legacy: `make ingest` (runs `scripts/ingest_simple.py` by default)
+- Legacy path removed. Use the new API endpoints exclusively (`/api/v1/docs/*`).
 - New: use API endpoints under `/api/v1/docs/*` (e.g., upload via `/api/v1/docs/upload`).
 
 ## Verification checklist

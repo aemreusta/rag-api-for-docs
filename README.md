@@ -16,9 +16,6 @@ cp .env.example .env
 # Start the complete system
 make up
 
-# Run initial data ingestion (one-time setup)
-make ingest
-
 # Verify system health
 curl http://localhost:8000/health
 ```
@@ -137,7 +134,7 @@ make chat                 # Test local chat endpoint with curl
 ```bash
 make db-shell             # Open PostgreSQL shell
 make db-status            # Database & pgvector status information
-make ingest               # Run data ingestion (index PDF documents)
+# Use API `/api/v1/docs/upload` for ingestion via the new pipeline
 make clickhouse-reset     # Drop OLAP volume (dev only)
 make clickhouse-test      # One-shot smoke tests
 ```
@@ -200,8 +197,6 @@ ai-gateway/
 │   └── main.py                  # Application entry point
 │
 ├── scripts/                     # Utility scripts
-│   ├── ingest.py                # Data ingestion with Langfuse
-│   ├── ingest_simple.py         # Simplified ingestion  
 │   ├── create_sample_pdf.py     # Generate test documents
 │   └── run_baseline_evaluation.py  # Performance evaluation
 │
