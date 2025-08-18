@@ -19,6 +19,7 @@ from app.core.dedup import ContentDeduplicator
 from app.core.embeddings import get_embedding_model
 from app.core.incremental import IncrementalProcessor
 from app.core.ingestion import NLTKAdaptiveChunker
+from app.core.language_detection import detect_document_language
 from app.core.logging_config import get_logger, set_request_id, set_trace_id, setup_logging
 from app.core.metadata import ChunkMetadataExtractor
 from app.core.storage import get_storage_backend
@@ -292,6 +293,25 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
             )
             file_text = ""
             page_texts = {}
+
+        # Detect and update document language
+        if file_text:
+            detected_language = detect_document_language(
+                text=file_text,
+                filename=doc.filename or "",
+                default="tr",  # Turkish default for Turkish service
+            )
+
+            # Update document language if detected
+            if doc.language != detected_language:
+                logger.info(
+                    "Document language updated",
+                    document_id=doc.id,
+                    filename=doc.filename,
+                    old_language=doc.language,
+                    detected_language=detected_language,
+                )
+                doc.language = detected_language
 
         # Process chunks and embeddings
         _process_chunks_and_embeddings(session, doc, file_text, page_texts)

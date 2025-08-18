@@ -53,6 +53,90 @@ UPLOAD_FILE_FORM = File(...)
 DB_DEP_UPLOAD: Session = Depends(get_db_session)
 
 
+def _safe_filename(name: str) -> str:
+    """Generate a safe filename by sanitizing and truncating."""
+    base = re.sub(r"[^A-Za-z0-9._-]", "_", name).strip("._-") or "upload"
+    return base[:200]
+
+
+async def _detect_language_from_filename(filename: str) -> str:
+    """Detect language from filename, fallback to Turkish."""
+    from app.core.language_detection import LanguageDetector
+
+    detector = LanguageDetector(default_language="tr")
+    detected_lang = detector.detect_language_from_filename(filename)
+    if detected_lang:
+        logger.info(
+            "Language detected from filename during upload",
+            filename=filename,
+            detected_language=detected_lang,
+        )
+        return detected_lang
+    return "tr"
+
+
+async def _get_or_store_file(payload: bytes, safe_name: str, content_hash: str) -> str:
+    """Get storage URI from cache or store file and cache the URI."""
+    try:
+        cache = await get_cache_backend()
+        cache_key = f"doc_hash:{content_hash}"
+        cached_uri = await cache.get(cache_key)
+        if isinstance(cached_uri, str) and cached_uri:
+            return cached_uri
+
+        storage_uri = storage.store_file(payload, safe_name)
+        await cache.set(cache_key, storage_uri, ttl=600)
+        return storage_uri
+    except Exception:
+        return storage.store_file(payload, safe_name)
+
+
+def _update_document_status(db: Session, doc_id: str) -> None:
+    """Update document status to processing."""
+    try:
+        db_doc = db.get(Document, doc_id)
+        if db_doc:
+            db_doc.status = DocumentStatusEnum.PROCESSING  # type: ignore[assignment]
+            db.commit()
+    except Exception:
+        pass
+
+
+def _enqueue_processing_job(doc_id: str, storage_uri: str, filename: str) -> None:
+    """Enqueue background processing job with correlation IDs."""
+    try:
+        job_id = str(uuid.uuid4())
+        request_id = get_request_id()
+        trace_id = get_trace_id()
+
+        job_data = {
+            "document_id": doc_id,
+            "storage_uri": storage_uri,
+            "request_id": request_id,
+            "trace_id": trace_id,
+            "parent_operation": "document_upload",
+        }
+
+        process_document_async.delay(job_id, job_data)
+
+        logger.info(
+            "Document upload successful, processing job enqueued",
+            doc_id=doc_id,
+            filename=filename,
+            job_id=job_id,
+            request_id=request_id,
+            trace_id=trace_id,
+        )
+    except Exception as e:
+        logger.error(
+            "Failed to enqueue background job",
+            doc_id=doc_id,
+            filename=filename,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+
+
 @router.post(
     "/upload",
     response_model=DocumentDetail,
@@ -86,26 +170,18 @@ async def upload_document(
         )
         raise HTTPException(status_code=400, detail=f"Invalid upload: {validation.reason}")
 
-    # Persist file to local storage and upsert document via deduplicator
-    def _safe_filename(name: str) -> str:
-        base = re.sub(r"[^A-Za-z0-9._-]", "_", name).strip("._-") or "upload"
-        return base[:200]
-
+    # Process file data
     payload = await file.read()
     content_hash = compute_sha256_hex(payload)
     safe_name = _safe_filename(file.filename)
-    # Cache check: if a document with this content_hash was recently processed, reuse storage_uri
-    try:
-        cache = await get_cache_backend()
-        cache_key = f"doc_hash:{content_hash}"
-        cached_uri = await cache.get(cache_key)
-        if isinstance(cached_uri, str) and cached_uri:
-            storage_uri = cached_uri
-        else:
-            storage_uri = storage.store_file(payload, safe_name)
-            await cache.set(cache_key, storage_uri, ttl=600)
-    except Exception:
-        storage_uri = storage.store_file(payload, safe_name)
+
+    # Detect language and get storage URI
+    initial_language = (
+        await _detect_language_from_filename(file.filename) if file.filename else "tr"
+    )
+    storage_uri = await _get_or_store_file(payload, safe_name, content_hash)
+
+    # Create document record
     dedup = ContentDeduplicator()
     doc, _ = dedup.upsert_document_by_hash(
         db,
@@ -115,51 +191,12 @@ async def upload_document(
         file_size=len(payload),
         page_count=None,
         new_content_hash=content_hash,
+        language=initial_language,
     )
 
-    # Update DB-backed status to processing immediately after enqueue
-    try:
-        db_doc = db.get(Document, doc.id)
-        if db_doc:
-            db_doc.status = DocumentStatusEnum.PROCESSING  # type: ignore[assignment]
-            db.commit()
-    except Exception:
-        pass
-
-    # Enqueue background processing with correlation IDs
-    try:
-        job_id = str(uuid.uuid4())
-        request_id = get_request_id()
-        trace_id = get_trace_id()
-
-        # Include correlation IDs in the job data for proper tracing
-        job_data = {
-            "document_id": doc.id,
-            "storage_uri": storage_uri,
-            "request_id": request_id,
-            "trace_id": trace_id,
-            "parent_operation": "document_upload",
-        }
-
-        process_document_async.delay(job_id, job_data)
-
-        logger.info(
-            "Document processing job enqueued",
-            doc_id=doc.id,
-            filename=file.filename,
-            job_id=job_id,
-            request_id=request_id,
-            trace_id=trace_id,
-            storage_uri=storage_uri,
-        )
-    except Exception as e:
-        logger.error(
-            "Failed to enqueue background job",
-            doc_id=doc.id,
-            filename=file.filename,
-            error=str(e),
-            error_type=type(e).__name__,
-        )
+    # Update status and enqueue processing
+    _update_document_status(db, doc.id)
+    _enqueue_processing_job(doc.id, storage_uri, file.filename)
     metrics.increment_counter("vector_search_requests_total", {"status": "ingest"})
     return DocumentDetail(id=doc.id, filename=file.filename, status="processing")
 

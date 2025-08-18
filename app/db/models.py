@@ -75,7 +75,7 @@ class Document(Base):
     mime_type = Column(String(100), nullable=False)
     page_count = Column(Integer)
     word_count = Column(Integer)
-    language = Column(String(10), default="en")
+    language = Column(String(10), default="tr")
     uploaded_at = Column(DateTime)
     updated_at = Column(DateTime)
     processed_at = Column(DateTime)
