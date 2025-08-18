@@ -20,7 +20,7 @@ from enum import Enum
 from typing import Any
 
 try:
-    import redis  # type: ignore
+    import redis.asyncio as redis  # type: ignore
 
     _HAS_REDIS = True
 except Exception:  # pragma: no cover

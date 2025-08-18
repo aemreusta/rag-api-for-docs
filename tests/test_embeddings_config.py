@@ -52,6 +52,10 @@ def test_openai_embedding_selected_when_configured():
     with (
         patch("app.core.config.settings.EMBEDDING_PROVIDER", "openai"),
         patch("app.core.config.settings.EMBEDDING_MODEL_NAME", "text-embedding-3-large"),
+        patch("os.environ.get") as mock_env_get,
     ):
+        # Mock the OPENAI_API_KEY environment variable
+        mock_env_get.return_value = "test-openai-api-key"
+
         model = get_embedding_model()
         assert hasattr(model, "embed") or hasattr(model, "aget_query_embedding")

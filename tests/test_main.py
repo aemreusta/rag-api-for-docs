@@ -21,7 +21,7 @@ def test_metrics_enabled():
     with patch("app.main.settings.PROMETHEUS_ENABLED", True):
         with patch("importlib.util.find_spec") as mock_find_spec:
             mock_find_spec.return_value = True  # prometheus_client is available
-            with patch("app.main.generate_latest") as mock_generate_latest:
+            with patch("prometheus_client.generate_latest") as mock_generate_latest:
                 mock_generate_latest.return_value = (
                     b"# HELP ingest_requests_total Total number of document ingest requests\n"
                 )

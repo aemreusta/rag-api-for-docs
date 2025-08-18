@@ -142,12 +142,6 @@ async def upload_document(
 DB_DEP_LIST: Session = Depends(get_db_session)
 
 
-@router.get(
-    "",
-    response_model=list[DocumentSummary],
-    summary="List documents",
-    response_description="Summary list of documents",
-)
 def _status_literal(s: object) -> str:
     try:
         if isinstance(s, DocumentStatusEnum):
@@ -160,6 +154,12 @@ def _status_literal(s: object) -> str:
         return "pending"
 
 
+@router.get(
+    "",
+    response_model=list[DocumentSummary],
+    summary="List documents",
+    response_description="Summary list of documents",
+)
 async def list_documents(db: Session = DB_DEP_LIST) -> list[DocumentSummary]:
     rows = db.query(Document).all()
     return [

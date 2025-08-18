@@ -6,7 +6,7 @@ This test verifies the basic functionality without complex mocking.
 
 import json
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -35,9 +35,10 @@ class TestGroqRateLimitSmoke:
             assert rate_limit_info["retry_after_seconds"] == 30
             assert "timestamp" in rate_limit_info
 
-    def test_redis_quota_storage(self):
+    @pytest.mark.asyncio
+    async def test_redis_quota_storage(self):
         """Test storing and retrieving quota info from Redis."""
-        mock_redis = MagicMock()
+        mock_redis = AsyncMock()
         mock_redis.get.return_value = None
         mock_redis.setex.return_value = True
 
@@ -52,7 +53,7 @@ class TestGroqRateLimitSmoke:
                 "timestamp": 1234567890,
             }
 
-            provider._store_rate_limit_info(quota_info)
+            await provider._store_rate_limit_info(quota_info)
 
             # Verify Redis was called correctly
             mock_redis.setex.assert_called_once()
@@ -78,11 +79,12 @@ class TestGroqRateLimitSmoke:
             unique_delays = set(jittered_delays)
             assert len(unique_delays) > 1
 
-    def test_rate_limit_preemption_logic(self):
+    @pytest.mark.asyncio
+    async def test_rate_limit_preemption_logic(self):
         """Test rate limit preemption logic."""
         import time
 
-        mock_redis = MagicMock()
+        mock_redis = AsyncMock()
 
         with patch("app.core.llm_router.settings.GROQ_API_KEY", "test-key"):
             provider = GroqProvider()
@@ -90,7 +92,7 @@ class TestGroqRateLimitSmoke:
 
             # Test with no stored info - should not skip
             mock_redis.get.return_value = None
-            should_skip, delay = provider._should_skip_due_to_rate_limits()
+            should_skip, delay = await provider._should_skip_due_to_rate_limits()
             assert should_skip is False
             assert delay == 0
 
@@ -105,7 +107,7 @@ class TestGroqRateLimitSmoke:
             mock_redis.get.return_value = json.dumps(low_quota_info)
 
             with patch("app.core.llm_router.metrics") as mock_metrics:
-                should_skip, delay = provider._should_skip_due_to_rate_limits()
+                should_skip, delay = await provider._should_skip_due_to_rate_limits()
                 assert should_skip is True
                 assert delay == 45
 

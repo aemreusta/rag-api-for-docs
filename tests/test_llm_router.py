@@ -232,8 +232,14 @@ class TestGroqProvider:
             # Missing headers should not be present
             assert "limit_requests_per_day" not in rate_limit_info
 
-    def test_store_and_retrieve_rate_limit_info(self, mock_redis_client):
+    @pytest.mark.asyncio
+    async def test_store_and_retrieve_rate_limit_info(self, mock_redis_client):
         """Test storing and retrieving rate limit info in Redis."""
+        # Use AsyncMock for Redis client
+        mock_redis_client = AsyncMock()
+        mock_redis_client.setex.return_value = True
+        mock_redis_client.get.return_value = None
+
         with patch("app.core.llm_router.settings.GROQ_API_KEY", "test-key"):
             provider = GroqProvider()
             provider.redis_client = mock_redis_client
@@ -245,7 +251,7 @@ class TestGroqProvider:
                 "timestamp": 1234567890,
             }
 
-            provider._store_rate_limit_info(rate_limit_info)
+            await provider._store_rate_limit_info(rate_limit_info)
 
             # Verify Redis setex was called correctly
             mock_redis_client.setex.assert_called_once()
@@ -260,9 +266,13 @@ class TestGroqProvider:
             retrieved_info = provider._get_stored_rate_limit_info()
             assert retrieved_info == rate_limit_info
 
-    def test_should_skip_due_to_rate_limits(self, mock_redis_client):
+    @pytest.mark.asyncio
+    async def test_should_skip_due_to_rate_limits(self, mock_redis_client):
         """Test rate limit preemption logic."""
         import time
+
+        # Use AsyncMock for Redis client
+        mock_redis_client = AsyncMock()
 
         with patch("app.core.llm_router.settings.GROQ_API_KEY", "test-key"):
             provider = GroqProvider()
@@ -270,7 +280,7 @@ class TestGroqProvider:
 
             # Test with no stored info
             mock_redis_client.get.return_value = None
-            should_skip, delay = provider._should_skip_due_to_rate_limits()
+            should_skip, delay = await provider._should_skip_due_to_rate_limits()
             assert should_skip is False
             assert delay == 0
 
@@ -285,7 +295,7 @@ class TestGroqProvider:
             mock_redis_client.get.return_value = json.dumps(rate_limit_info)
 
             with patch("app.core.llm_router.metrics") as mock_metrics:
-                should_skip, delay = provider._should_skip_due_to_rate_limits()
+                should_skip, delay = await provider._should_skip_due_to_rate_limits()
                 assert should_skip is True
                 assert delay == 60
                 mock_metrics.increment_counter.assert_called_once_with(
