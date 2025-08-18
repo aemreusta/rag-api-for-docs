@@ -454,7 +454,7 @@ class GroqProvider(LLMProvider):
         )
         return wait_time
 
-    def _handle_service_error(self, attempt: int, max_retries: int, error_str: str):
+    async def _handle_service_error(self, attempt: int, max_retries: int, error_str: str):
         """Handle service unavailable errors."""
         if attempt == max_retries - 1:
             raise
@@ -497,7 +497,7 @@ class GroqProvider(LLMProvider):
 
         # Handle service unavailable errors
         if "503" in error_str or "service unavailable" in error_str:
-            return self._handle_service_error(attempt, max_retries, error_str)
+            return await self._handle_service_error(attempt, max_retries, error_str)
 
         # For other errors, don't retry
         raise
