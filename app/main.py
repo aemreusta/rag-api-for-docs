@@ -1,7 +1,9 @@
 import contextlib
+import importlib.util
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from app.api.v1 import chat, docs, status
 from app.api.v1 import models as models_api
@@ -57,6 +59,31 @@ def health_check():
     """
     logger.info("Health check requested")
     return {"status": "ok", "environment": settings.ENVIRONMENT, "version": app.version}
+
+
+@app.get("/metrics", tags=["Monitoring"])
+def metrics():
+    """
+    Prometheus metrics endpoint.
+    Only enabled if PROMETHEUS_ENABLED is true and prometheus_client is available.
+    """
+    if not settings.PROMETHEUS_ENABLED:
+        logger.warning("Metrics endpoint requested but PROMETHEUS_ENABLED is false")
+        raise HTTPException(status_code=404, detail="Metrics endpoint not enabled")
+
+    if importlib.util.find_spec("prometheus_client") is None:
+        logger.warning("Metrics endpoint requested but prometheus_client not available")
+        raise HTTPException(status_code=404, detail="Prometheus client not available")
+
+    try:
+        from prometheus_client import REGISTRY, generate_latest
+
+        logger.info("Metrics endpoint requested")
+        metrics_data = generate_latest(REGISTRY)
+        return Response(content=metrics_data, media_type="text/plain; version=0.0.4; charset=utf-8")
+    except Exception as e:
+        logger.error("Failed to generate metrics", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to generate metrics") from e
 
 
 # Include API routers
