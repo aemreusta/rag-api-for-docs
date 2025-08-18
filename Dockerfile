@@ -20,12 +20,12 @@ FROM base AS deps-core
 COPY requirements/requirements-core.in requirements-core.in
 RUN --mount=type=cache,target=/root/.cache \
     uv pip compile requirements-core.in -o requirements-core.txt && \
-    uv pip sync --system requirements-core.txt
+    uv pip sync --system requirements-core.txt --link-mode=copy
 
 FROM base AS deps-dev
-COPY requirements/requirements-dev.txt ./
+COPY requirements /app/requirements
 RUN --mount=type=cache,target=/root/.cache \
-    uv pip sync --system requirements-dev.txt
+    uv pip sync --system /app/requirements/requirements-dev.txt --link-mode=copy
 
 # Create necessary directories
 RUN mkdir -p pdf_documents
