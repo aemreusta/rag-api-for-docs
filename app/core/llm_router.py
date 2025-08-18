@@ -273,7 +273,7 @@ class GroqProvider(LLMProvider):
 
         return rate_limit_info
 
-    def _store_rate_limit_info(self, rate_limit_info: dict):
+    async def _store_rate_limit_info(self, rate_limit_info: dict):
         """Store rate limit information in Redis for sharing across workers."""
         if not self.redis_client or not rate_limit_info:
             return
@@ -281,7 +281,7 @@ class GroqProvider(LLMProvider):
         try:
             # Store with 5-minute expiry (should be refreshed by new requests)
             redis_key = "groq:rate_limit"
-            self.redis_client.setex(
+            await self.redis_client.setex(
                 redis_key,
                 300,  # 5 minutes TTL
                 json.dumps(rate_limit_info),
@@ -290,14 +290,14 @@ class GroqProvider(LLMProvider):
         except Exception as e:
             self.logger.warning("Failed to store rate limit info in Redis", error=str(e))
 
-    def _get_stored_rate_limit_info(self) -> dict:
+    async def _get_stored_rate_limit_info(self) -> dict:
         """Retrieve stored rate limit information from Redis."""
         if not self.redis_client:
             return {}
 
         try:
             redis_key = "groq:rate_limit"
-            stored_data = self.redis_client.get(redis_key)
+            stored_data = await self.redis_client.get(redis_key)
             if stored_data:
                 return json.loads(stored_data)
         except Exception as e:
@@ -305,9 +305,9 @@ class GroqProvider(LLMProvider):
 
         return {}
 
-    def _should_skip_due_to_rate_limits(self) -> tuple[bool, int]:
+    async def _should_skip_due_to_rate_limits(self) -> tuple[bool, int]:
         """Check if we should skip this provider due to known rate limits."""
-        stored_info = self._get_stored_rate_limit_info()
+        stored_info = await self._get_stored_rate_limit_info()
         if not stored_info:
             return False, 0
 
@@ -387,13 +387,13 @@ class GroqProvider(LLMProvider):
         jitter_factor = 0.75 + (random.random() * 0.5)  # 0.75 to 1.25
         return base_delay * jitter_factor
 
-    def _handle_successful_response(self, result):
+    async def _handle_successful_response(self, result):
         """Handle successful response and extract rate limit headers."""
         if hasattr(result, "_raw_response") and hasattr(result._raw_response, "headers"):
             headers = dict(result._raw_response.headers)
             rate_limit_info = self._parse_rate_limit_headers(headers)
             if rate_limit_info:
-                self._store_rate_limit_info(rate_limit_info)
+                await self._store_rate_limit_info(rate_limit_info)
         return result
 
     def _handle_timeout_error(self, attempt: int, max_retries: int, error: Exception):
@@ -437,7 +437,7 @@ class GroqProvider(LLMProvider):
                     "remaining_tokens": 0,
                     "timestamp": time.time(),
                 }
-                self._store_rate_limit_info(rate_limit_info)
+                await self._store_rate_limit_info(rate_limit_info)
             raise
 
         # Use retry-after if provided, otherwise exponential backoff
@@ -466,9 +466,9 @@ class GroqProvider(LLMProvider):
         )
         return wait_time
 
-    def _check_rate_limit_preemption(self, attempt: int):
+    async def _check_rate_limit_preemption(self, attempt: int):
         """Check if we should skip due to known rate limits."""
-        should_skip, suggested_delay = self._should_skip_due_to_rate_limits()
+        should_skip, suggested_delay = await self._should_skip_due_to_rate_limits()
         if should_skip and attempt == 0:  # Only skip on first attempt
             wait_time = min(suggested_delay, 30)  # Cap at 30 seconds
             raise Exception(f"Rate limit preemption: retry after {wait_time}s")
@@ -476,7 +476,7 @@ class GroqProvider(LLMProvider):
     async def _execute_with_timeout(self, func, *args, **kwargs):
         """Execute the function with timeout and handle successful response."""
         result = await asyncio.wait_for(func(*args, **kwargs), timeout=self.timeout_seconds)
-        return self._handle_successful_response(result)
+        return await self._handle_successful_response(result)
 
     async def _handle_error(self, e: Exception, attempt: int, max_retries: int) -> float:
         """Handle various error types and return wait time if retry is needed."""
@@ -507,7 +507,7 @@ class GroqProvider(LLMProvider):
         for attempt in range(max_retries):
             try:
                 # Check if we should skip due to known rate limits
-                self._check_rate_limit_preemption(attempt)
+                await self._check_rate_limit_preemption(attempt)
                 return await self._execute_with_timeout(func, *args, **kwargs)
 
             except asyncio.TimeoutError as err:
@@ -862,7 +862,7 @@ class LLMRouter(CustomLLM):
         try:
             if _HAS_REDIS:
                 self._redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
-                self._redis_client.ping()  # Test connection
+                # Note: ping() call removed as it requires await in async context
                 logger.info("Redis connection established for LLM Router")
             else:
                 self._redis_client = None
@@ -932,15 +932,17 @@ class LLMRouter(CustomLLM):
         """Generate cache key for failed provider."""
         return f"failed_provider:{provider.provider_type.value}:{model}:{error_type.value}"
 
-    def _is_provider_cached_as_failed(self, provider: LLMProvider, error_type: ErrorType) -> bool:
+    async def _is_provider_cached_as_failed(
+        self, provider: LLMProvider, error_type: ErrorType
+    ) -> bool:
         """Check if provider is cached as failed."""
         if not self._redis_client:
             return False
 
         cache_key = self._get_cache_key(provider, provider.get_model_name(), error_type)
-        return bool(self._redis_client.exists(cache_key))
+        return bool(await self._redis_client.exists(cache_key))
 
-    def _cache_provider_failure(self, provider: LLMProvider, error_type: ErrorType):
+    async def _cache_provider_failure(self, provider: LLMProvider, error_type: ErrorType):
         """Cache provider failure in Redis."""
         if not self._redis_client:
             return
@@ -953,7 +955,7 @@ class LLMRouter(CustomLLM):
             "timestamp": time.time(),
         }
 
-        self._redis_client.setex(
+        await self._redis_client.setex(
             cache_key,
             settings.LLM_FALLBACK_CACHE_SECONDS,
             json.dumps(cache_data),
@@ -1020,7 +1022,7 @@ class LLMRouter(CustomLLM):
             error_type = self._classify_error(e)
 
             if self._should_trigger_fallback(e):
-                self._cache_provider_failure(provider, error_type)
+                await self._cache_provider_failure(provider, error_type)
                 raise
 
             # Re-raise the error if it shouldn't trigger fallback
@@ -1072,7 +1074,7 @@ class LLMRouter(CustomLLM):
         for provider in provider_order:
             # Skip providers that are cached as failed
             error_type = ErrorType.TIMEOUT  # Default error type for checking cache
-            if self._is_provider_cached_as_failed(provider, error_type):
+            if await self._is_provider_cached_as_failed(provider, error_type):
                 self.logger.info(
                     "Skipping cached failed provider",
                     provider=provider.provider_type.value,
@@ -1128,7 +1130,7 @@ class LLMRouter(CustomLLM):
         for provider in provider_order:
             # Skip providers that are cached as failed
             error_type = ErrorType.TIMEOUT  # Default error type for checking cache
-            if self._is_provider_cached_as_failed(provider, error_type):
+            if await self._is_provider_cached_as_failed(provider, error_type):
                 self.logger.info(
                     "Skipping cached failed provider for streaming",
                     provider=provider.provider_type.value,
