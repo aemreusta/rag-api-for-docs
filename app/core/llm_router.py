@@ -409,7 +409,7 @@ class GroqProvider(LLMProvider):
         )
         return wait_time
 
-    def _handle_rate_limit_error(
+    async def _handle_rate_limit_error(
         self, attempt: int, max_retries: int, error: Exception, error_str: str
     ):
         """Handle rate limiting and capacity errors with retry logic."""
@@ -493,7 +493,7 @@ class GroqProvider(LLMProvider):
             or "498" in error_str
             or "capacity" in error_str
         ):
-            return self._handle_rate_limit_error(attempt, max_retries, e, error_str)
+            return await self._handle_rate_limit_error(attempt, max_retries, e, error_str)
 
         # Handle service unavailable errors
         if "503" in error_str or "service unavailable" in error_str:
