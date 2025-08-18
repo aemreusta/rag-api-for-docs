@@ -1,16 +1,29 @@
-# Heavy ML dependencies (slow to install)
+# =============================================================================
+# MACHINE LEARNING DEPENDENCIES
+# =============================================================================
+# Heavy ML dependencies (slow to install) for LLM and embedding functionality
+
+# Core LlamaIndex Framework
 llama-index
+
+# LLM Provider Integrations
 llama-index-llms-google-genai
-llama-index-embeddings-google
 llama-index-llms-openrouter
 llama-index-llms-openai
+groq
+openai
+
+# Embedding Provider Integrations
+llama-index-embeddings-google
 llama-index-embeddings-huggingface
+
+# LlamaIndex Extensions
 llama-index-callbacks-langfuse
 llama-index-vector-stores-postgres
 llama-index-readers-file
 llama-index-readers-llama-parse
+
+# Document Processing & Web Scraping
 beautifulsoup4
 html2text
-groq
-openai
 

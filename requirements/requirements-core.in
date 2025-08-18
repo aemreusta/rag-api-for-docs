@@ -1,15 +1,28 @@
-# Core runtime dependencies (fast to install)
+# =============================================================================
+# CORE RUNTIME DEPENDENCIES
+# =============================================================================
+# Fast-installing core dependencies for the chatbot API service
+
+# Web Framework & Server
 fastapi
 uvicorn
-langfuse
+python-multipart
+
+# Database & Persistence
 psycopg2-binary
 pgvector
+alembic
+redis
+
+# Data Validation & Configuration
 pydantic
 pydantic-settings
-redis
+
+# Monitoring & Observability
+langfuse
 structlog
 prometheus_client
+
+# Package Management
 uv
-python-multipart
-alembic
 

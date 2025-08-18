@@ -538,9 +538,7 @@ python-dotenv==1.1.1
     #   llama-cloud-services
     #   pydantic-settings
 python-multipart==0.0.20
-    # via
-    #   -r requirements/requirements-core.in
-    #   -r requirements/requirements-dev.in
+    # via -r requirements/requirements-core.in
 pytz==2025.2
     # via pandas
 pyupgrade==3.20.0
@@ -559,7 +557,6 @@ questionary==2.1.0
 redis==6.2.0
     # via
     #   -r requirements/requirements-core.in
-    #   -r requirements/requirements-dev.in
     #   fakeredis
 referencing==0.36.2
     # via

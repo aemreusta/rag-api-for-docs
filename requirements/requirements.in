@@ -1,2 +1,10 @@
- -r requirements-core.in
- -r requirements-ml.in
+# =============================================================================
+# MAIN REQUIREMENTS FILE
+# =============================================================================
+# This file combines all production dependencies for the chatbot API service
+
+# Core Dependencies (Fast Installation)
+-r requirements-core.in
+
+# Machine Learning Dependencies (Slow Installation)
+-r requirements-ml.in

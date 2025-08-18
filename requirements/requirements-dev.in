@@ -1,15 +1,19 @@
-# Core dependencies from production
+# =============================================================================
+# DEVELOPMENT DEPENDENCIES
+# =============================================================================
+# Dependencies for development, testing, and code quality
+
+# Core Dependencies from Production
 -r requirements.in
 
-# Testing and development tools
-fakeredis
-pytest-asyncio
+# Testing Framework & Tools
 pytest
+pytest-asyncio
 pytest-httpx
 pytest-cov
-pytest-asyncio
+fakeredis
 
-# Code quality and linting
+# Code Quality & Linting
 pre-commit
 ruff
 pyupgrade
@@ -19,14 +23,12 @@ yamllint
 bandit
 commitizen
 
-# Interactive tools
+# Interactive Development Tools
 ipython
 
-# Streamlit Demo UI
+# Demo UI Dependencies
 streamlit
 streamlit-chat
-python-multipart
 pypdf
-redis
-celery
 nltk
+celery
