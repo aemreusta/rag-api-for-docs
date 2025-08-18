@@ -12,7 +12,7 @@ from app.api.deps import get_db_session
 from app.core.cache import get_cache_backend
 from app.core.dedup import ContentDeduplicator, compute_sha256_hex
 from app.core.incremental import ChangeSet, IncrementalProcessor
-from app.core.jobs import celery_app, process_document_async
+from app.core.jobs import celery_app, process_document_async, retry_failed_document
 from app.core.logging_config import get_logger, get_request_id, get_trace_id
 from app.core.metrics import get_metrics_backend
 from app.core.quality import QualityAssurance
@@ -432,3 +432,152 @@ async def get_job_status(job_id: str) -> JobStatusResponse:
         return JobStatusResponse(id=job_id, status=status, detail=detail)
     except Exception:
         return JobStatusResponse(id=job_id, status="pending", detail=None)
+
+
+# ----------------------------
+# Document retry endpoints
+# ----------------------------
+
+
+class RetryDocumentResponse(BaseModel):
+    job_id: str
+    document_id: str
+    status: Literal["queued", "processing", "failed"]
+    message: str
+
+
+@router.post(
+    "/retry/{document_id}",
+    response_model=RetryDocumentResponse,
+    status_code=202,
+    summary="Retry failed document processing",
+    description=(
+        "Retry processing for a failed document.\n\n"
+        "- Resets document status to processing\n"
+        "- Extracts metadata (page count, word count)\n"
+        "- Detects proper language with Turkish default\n"
+        "- Regenerates chunks and embeddings\n"
+        "- Returns job ID for tracking retry status"
+    ),
+)
+async def retry_document_processing(
+    document_id: str, db: Session = DB_DEP
+) -> RetryDocumentResponse:
+    """Retry processing for a failed document."""
+    # Check if document exists and can be retried
+    doc = db.get(Document, document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Check if document is in a retryable state
+    if doc.status not in [DocumentStatusEnum.FAILED, DocumentStatusEnum.PAUSED]:
+        message = (
+            f"Document status '{doc.status.value}' is not retryable. "
+            "Only failed or paused documents can be retried."
+        )
+        raise HTTPException(status_code=400, detail=message)
+
+    try:
+        # Generate new job ID for the retry
+        job_id = str(uuid.uuid4())
+
+        # Enqueue retry task
+        retry_failed_document.delay(document_id, "manual_api_retry")
+
+        logger.info(
+            "Document retry enqueued",
+            document_id=document_id,
+            job_id=job_id,
+            previous_status=doc.status.value,
+            request_id=get_request_id(),
+            trace_id=get_trace_id(),
+        )
+
+        return RetryDocumentResponse(
+            job_id=job_id,
+            document_id=document_id,
+            status="queued",
+            message="Document retry has been queued for processing",
+        )
+
+    except Exception as e:
+        logger.error(
+            "Failed to enqueue document retry",
+            document_id=document_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to enqueue document for retry processing"
+        ) from e
+
+
+class RetryFailedDocumentsResponse(BaseModel):
+    queued_count: int
+    job_ids: list[str]
+    message: str
+
+
+@router.post(
+    "/retry-failed",
+    response_model=RetryFailedDocumentsResponse,
+    status_code=202,
+    summary="Retry all failed documents",
+    description=(
+        "Batch retry processing for all failed documents.\n\n"
+        "- Finds all documents with 'failed' status\n"
+        "- Enqueues retry jobs for each failed document\n"
+        "- Returns count and job IDs for tracking"
+    ),
+)
+async def retry_all_failed_documents(
+    db: Session = DB_DEP,
+) -> RetryFailedDocumentsResponse:
+    """Retry processing for all failed documents."""
+    # Find all failed documents
+    failed_docs = db.query(Document).filter(Document.status == DocumentStatusEnum.FAILED).all()
+
+    if not failed_docs:
+        return RetryFailedDocumentsResponse(
+            queued_count=0, job_ids=[], message="No failed documents found to retry"
+        )
+
+    job_ids = []
+    queued_count = 0
+
+    for doc in failed_docs:
+        try:
+            job_id = str(uuid.uuid4())
+            retry_failed_document.delay(doc.id, "batch_api_retry")
+            job_ids.append(job_id)
+            queued_count += 1
+
+            logger.info(
+                "Failed document queued for retry",
+                document_id=doc.id,
+                filename=doc.filename,
+                job_id=job_id,
+            )
+
+        except Exception as e:
+            logger.error(
+                "Failed to enqueue document retry",
+                document_id=doc.id,
+                filename=doc.filename,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            continue
+
+    logger.info(
+        "Batch retry completed",
+        total_failed=len(failed_docs),
+        queued_count=queued_count,
+        failed_to_queue=len(failed_docs) - queued_count,
+    )
+
+    return RetryFailedDocumentsResponse(
+        queued_count=queued_count,
+        job_ids=job_ids,
+        message=f"Queued {queued_count} failed documents for retry processing",
+    )

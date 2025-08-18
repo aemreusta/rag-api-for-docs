@@ -30,11 +30,108 @@ setup_logging()
 logger = get_logger(__name__)
 
 
-def _extract_pdf_per_page(file_bytes: bytes) -> tuple[str, dict[int, str]]:
-    """Extract text from PDF per-page using pypdf.
+def _create_session():
+    """Create a SQLAlchemy session for worker context."""
+    db_url = (
+        f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}"
+        f"@{settings.POSTGRES_SERVER}:5432/{settings.POSTGRES_DB}"
+    )
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=create_engine(db_url))
+    return SessionLocal()
+
+
+def _init_task_context_from_job(document_data: dict, job_id: str) -> tuple[str | None, str, str]:
+    """Initialize request/trace context from job payload and return identifiers."""
+    request_id = document_data.get("request_id")
+    trace_id = document_data.get("trace_id", job_id)
+    parent_operation = document_data.get("parent_operation", "unknown")
+
+    if request_id:
+        set_request_id(request_id)
+    else:
+        set_request_id()
+    set_trace_id(trace_id)
+
+    return request_id, trace_id, parent_operation
+
+
+def _safe_retrieve_and_extract(doc: Document, storage_uri: str | None):
+    """Retrieve file and extract content, returning safe defaults on failure."""
+    try:
+        return _retrieve_and_extract_content(doc, storage_uri)
+    except Exception as err:  # noqa: BLE001 - want broad catch at task boundary
+        logger.warning(
+            "file_retrieval_failed",
+            extra={
+                "document_id": getattr(doc, "id", None),
+                "storage_uri": storage_uri or getattr(doc, "storage_uri", None),
+                "error": str(err),
+            },
+        )
+        return "", {}, {"page_count": 0, "word_count": 0}
+
+
+def _update_document_metadata_from_extraction(doc: Document, metadata: dict, during: str) -> None:
+    """Update document page/word counts from extraction metadata with logs."""
+    if not metadata:
+        return
+    if metadata.get("page_count") and doc.page_count != metadata["page_count"]:
+        logger.info(
+            f"Document page count updated during {during}",
+            document_id=doc.id,
+            old_page_count=doc.page_count,
+            new_page_count=metadata["page_count"],
+        )
+        doc.page_count = metadata["page_count"]
+
+    if metadata.get("word_count") and doc.word_count != metadata["word_count"]:
+        logger.info(
+            f"Document word count updated during {during}",
+            document_id=doc.id,
+            old_word_count=doc.word_count,
+            new_word_count=metadata["word_count"],
+        )
+        doc.word_count = metadata["word_count"]
+
+
+def _detect_and_update_language(doc: Document, file_text: str) -> None:
+    """Detect language from text and update doc if changed."""
+    if not file_text:
+        return
+    detected_language = detect_document_language(
+        text=file_text, filename=doc.filename or "", default="tr"
+    )
+    if doc.language != detected_language:
+        logger.info(
+            "Document language updated",
+            document_id=doc.id,
+            filename=doc.filename,
+            old_language=doc.language,
+            detected_language=detected_language,
+        )
+        doc.language = detected_language
+
+
+def _mark_status(session, doc: Document, status_value: str) -> None:
+    """Mark document status safely without raising errors."""
+    try:
+        from app.db.models import DocumentStatusEnum
+
+        db_doc = session.get(Document, doc.id)
+        if db_doc:
+            db_doc.status = getattr(DocumentStatusEnum, status_value)
+    except Exception:
+        pass
+
+
+def _extract_pdf_per_page(file_bytes: bytes) -> tuple[str, dict[int, str], dict]:
+    """Extract text from PDF per-page using pypdf with metadata.
 
     Returns:
-        tuple: (combined_text, page_texts_dict) where page_texts_dict is {page_num: text}
+        tuple: (combined_text, page_texts_dict, metadata_dict)
+            - combined_text: All text combined
+            - page_texts_dict: {page_num: text}
+            - metadata_dict: {page_count: int, word_count: int}
     """
     try:
         import pypdf
@@ -42,6 +139,7 @@ def _extract_pdf_per_page(file_bytes: bytes) -> tuple[str, dict[int, str]]:
         pdf_reader = pypdf.PdfReader(io.BytesIO(file_bytes))
         page_texts = {}
         combined_texts = []
+        total_word_count = 0
 
         for page_num, page in enumerate(pdf_reader.pages, start=1):
             try:
@@ -49,12 +147,18 @@ def _extract_pdf_per_page(file_bytes: bytes) -> tuple[str, dict[int, str]]:
                 if page_text and page_text.strip():
                     page_texts[page_num] = page_text
                     combined_texts.append(page_text)
+
+                    # Count words for this page
+                    page_word_count = len(page_text.split())
+                    total_word_count += page_word_count
+
                     logger.debug(
                         "pdf_page_extracted",
                         extra={
                             "page_number": page_num,
                             "text_length": len(page_text),
                             "char_count": len(page_text.strip()),
+                            "word_count": page_word_count,
                         },
                     )
                 else:
@@ -66,17 +170,24 @@ def _extract_pdf_per_page(file_bytes: bytes) -> tuple[str, dict[int, str]]:
                 continue
 
         combined_text = "\n\n".join(combined_texts)
+        page_count = len(pdf_reader.pages)
+
+        metadata = {
+            "page_count": page_count,
+            "word_count": total_word_count,
+        }
 
         logger.info(
             "pdf_extraction_completed",
             extra={
-                "total_pages": len(pdf_reader.pages),
+                "total_pages": page_count,
                 "extracted_pages": len(page_texts),
                 "combined_length": len(combined_text),
+                "total_word_count": total_word_count,
             },
         )
 
-        return combined_text, page_texts
+        return combined_text, page_texts, metadata
 
     except Exception as e:
         logger.error(
@@ -85,9 +196,11 @@ def _extract_pdf_per_page(file_bytes: bytes) -> tuple[str, dict[int, str]]:
         # Fallback to decode attempt
         try:
             fallback_text = file_bytes.decode("utf-8", errors="ignore")
-            return fallback_text, {1: fallback_text} if fallback_text else {}
+            word_count = len(fallback_text.split()) if fallback_text else 0
+            metadata = {"page_count": 1, "word_count": word_count}
+            return fallback_text, {1: fallback_text} if fallback_text else {}, metadata
         except Exception:
-            return "", {}
+            return "", {}, {"page_count": 0, "word_count": 0}
 
 
 def _create_celery_app() -> Celery:
@@ -122,8 +235,12 @@ celery_app: Celery = _create_celery_app()
 
 def _retrieve_and_extract_content(
     doc: Document, storage_uri: str | None
-) -> tuple[str, dict[int, str]]:
-    """Retrieve file and extract content based on MIME type."""
+) -> tuple[str, dict[int, str], dict]:
+    """Retrieve file and extract content based on MIME type with metadata.
+
+    Returns:
+        tuple: (file_text, page_texts, metadata)
+    """
     backend = get_storage_backend()
     file_bytes = backend.retrieve_file(storage_uri or doc.storage_uri)
 
@@ -134,7 +251,9 @@ def _retrieve_and_extract_content(
         # Fallback for non-PDF files
         file_text = file_bytes.decode("utf-8", errors="ignore")
         page_texts = {1: file_text} if file_text else {}
-        return file_text, page_texts
+        word_count = len(file_text.split()) if file_text else 0
+        metadata = {"page_count": 1, "word_count": word_count}
+        return file_text, page_texts, metadata
 
 
 def _process_chunks_and_embeddings(
@@ -244,17 +363,8 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
 
     Minimal v1: chunk via ingestion engine, dedup/update chunks, embed via IncrementalProcessor.
     """
-    # Extract correlation IDs from job data if available
-    request_id = document_data.get("request_id")
-    trace_id = document_data.get("trace_id", job_id)
-    parent_operation = document_data.get("parent_operation", "unknown")
-
     # Initialize correlation IDs for worker task context
-    if request_id:
-        set_request_id(request_id)
-    else:
-        set_request_id()
-    set_trace_id(trace_id)
+    request_id, trace_id, parent_operation = _init_task_context_from_job(document_data, job_id)
 
     logger.info(
         "Document processing task started",
@@ -266,9 +376,7 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
         worker_pid=os.getpid(),
     )
     # DB session (worker-safe)
-    db_url = f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_SERVER}:5432/{settings.POSTGRES_DB}"
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=create_engine(db_url))
-    session = SessionLocal()
+    session = _create_session()
     try:
         doc_id = document_data.get("document_id")
         storage_uri = document_data.get("storage_uri")
@@ -279,52 +387,20 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
         if not doc:
             return {"job_id": job_id, "status": "failed", "error": "document_not_found"}
 
-        # Fetch file contents and extract text
-        try:
-            file_text, page_texts = _retrieve_and_extract_content(doc, storage_uri)
-        except Exception as e:
-            logger.warning(
-                "file_retrieval_failed",
-                extra={
-                    "document_id": doc_id,
-                    "storage_uri": storage_uri or doc.storage_uri,
-                    "error": str(e),
-                },
-            )
-            file_text = ""
-            page_texts = {}
+        # Fetch file contents and extract text with metadata
+        file_text, page_texts, metadata = _safe_retrieve_and_extract(doc, storage_uri)
+
+        # Update document metadata
+        _update_document_metadata_from_extraction(doc, metadata, during="processing")
 
         # Detect and update document language
-        if file_text:
-            detected_language = detect_document_language(
-                text=file_text,
-                filename=doc.filename or "",
-                default="tr",  # Turkish default for Turkish service
-            )
-
-            # Update document language if detected
-            if doc.language != detected_language:
-                logger.info(
-                    "Document language updated",
-                    document_id=doc.id,
-                    filename=doc.filename,
-                    old_language=doc.language,
-                    detected_language=detected_language,
-                )
-                doc.language = detected_language
+        _detect_and_update_language(doc, file_text)
 
         # Process chunks and embeddings
         _process_chunks_and_embeddings(session, doc, file_text, page_texts)
 
         # Mark document completed
-        try:
-            db_doc = session.get(Document, doc.id)
-            if db_doc:
-                from app.db.models import DocumentStatusEnum
-
-                db_doc.status = DocumentStatusEnum.COMPLETED  # type: ignore[assignment]
-        except Exception:
-            pass
+        _mark_status(session, doc, "COMPLETED")
         session.commit()
 
         logger.info(
@@ -396,6 +472,104 @@ def scrape_url_async(self, job_id: str, url: str, options: dict | None = None) -
     )
 
     return {"job_id": job_id, "status": "queued", "request_id": request_id, "trace_id": trace_id}
+
+
+@celery_app.task(bind=True, max_retries=3, name="jobs.retry_failed_document")
+def retry_failed_document(self, document_id: str, retry_reason: str = "manual_retry") -> dict:
+    """Retry processing for a failed document.
+
+    Args:
+        document_id: ID of the document to retry
+        retry_reason: Reason for the retry (for logging)
+
+    Returns:
+        dict: Processing result
+    """
+    # Initialize correlation IDs for retry task context
+    set_request_id()
+    set_trace_id()
+
+    logger.info(
+        "Document retry task started",
+        document_id=document_id,
+        retry_reason=retry_reason,
+        worker_pid=os.getpid(),
+    )
+
+    # DB session (worker-safe)
+    session = _create_session()
+
+    try:
+        doc = session.get(Document, document_id)
+        if not doc:
+            return {"status": "failed", "error": "document_not_found"}
+
+        # Reset document status to processing
+        from app.db.models import DocumentStatusEnum
+
+        doc.status = DocumentStatusEnum.PROCESSING
+        session.flush()
+
+        logger.info(
+            "Document status reset to processing",
+            document_id=document_id,
+            retry_reason=retry_reason,
+        )
+
+        # Fetch file contents and extract text with metadata
+        file_text, page_texts, metadata = _safe_retrieve_and_extract(doc, None)
+
+        # Update document metadata
+        _update_document_metadata_from_extraction(doc, metadata, during="retry")
+
+        # Detect and update document language
+        _detect_and_update_language(doc, file_text)
+
+        # Process chunks and embeddings
+        _process_chunks_and_embeddings(session, doc, file_text, page_texts)
+
+        # Mark document completed
+        _mark_status(session, doc, "COMPLETED")
+        session.commit()
+
+        logger.info(
+            "Document retry task completed successfully",
+            document_id=document_id,
+            retry_reason=retry_reason,
+            filename=doc.filename,
+        )
+
+        return {
+            "status": "completed",
+            "document_id": document_id,
+            "retry_reason": retry_reason,
+        }
+
+    except Exception as e:
+        # Mark document as failed
+        try:
+            db_doc = session.get(Document, document_id)
+            if db_doc:
+                _mark_status(session, db_doc, "FAILED")
+            session.commit()
+        except Exception:
+            pass
+
+        logger.error(
+            "Document retry task failed",
+            document_id=document_id,
+            retry_reason=retry_reason,
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
+        return {
+            "status": "failed",
+            "document_id": document_id,
+            "error": str(e),
+        }
+    finally:
+        session.close()
 
 
 @celery_app.task(name="jobs.cleanup_failed_jobs")
