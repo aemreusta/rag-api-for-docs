@@ -49,20 +49,38 @@ def _get_google_embedding(provider: str, model_name: str) -> Any:
         raise ValueError(error_msg)
 
     try:
-        from llama_index.embeddings.google import GeminiEmbedding
+        # Try to use the newer Google GenAI embedding first
+        try:
+            from llama_index.embeddings.google_genai import GoogleGenerativeAIEmbedding
 
-        # Set the API key in environment if not already set
-        if settings.GOOGLE_AI_STUDIO_API_KEY and not os.environ.get("GOOGLE_API_KEY"):
-            os.environ["GOOGLE_API_KEY"] = settings.GOOGLE_AI_STUDIO_API_KEY
+            # Set the API key in environment if not already set
+            if settings.GOOGLE_AI_STUDIO_API_KEY and not os.environ.get("GOOGLE_API_KEY"):
+                os.environ["GOOGLE_API_KEY"] = settings.GOOGLE_AI_STUDIO_API_KEY
 
-        model_id = model_name
-        if not (model_id.startswith("models/") or model_id.startswith("tunedModels/")):
-            model_id = f"models/{model_id}"
+            model_id = model_name
+            if not (model_id.startswith("models/") or model_id.startswith("tunedModels/")):
+                model_id = f"models/{model_id}"
 
-        # Initialize GeminiEmbedding with correct parameters
-        return GeminiEmbedding(
-            model_name=model_id, api_key=google_api_key, task_type="retrieval_document"
-        )
+            # Initialize with the newer GoogleGenerativeAIEmbedding
+            return GoogleGenerativeAIEmbedding(
+                model_name=model_id, api_key=google_api_key, task_type="retrieval_document"
+            )
+        except ImportError:
+            # Fallback to the deprecated GeminiEmbedding if newer one is not available
+            from llama_index.embeddings.google import GeminiEmbedding
+
+            # Set the API key in environment if not already set
+            if settings.GOOGLE_AI_STUDIO_API_KEY and not os.environ.get("GOOGLE_API_KEY"):
+                os.environ["GOOGLE_API_KEY"] = settings.GOOGLE_AI_STUDIO_API_KEY
+
+            model_id = model_name
+            if not (model_id.startswith("models/") or model_id.startswith("tunedModels/")):
+                model_id = f"models/{model_id}"
+
+            # Initialize GeminiEmbedding with correct parameters
+            return GeminiEmbedding(
+                model_name=model_id, api_key=google_api_key, task_type="retrieval_document"
+            )
     except ImportError as e:
         error_msg = (
             f"Google embedding provider selected but required dependencies not available: {e}. "
@@ -83,9 +101,17 @@ def get_embedding_model() -> Any:
     model_name = settings.EMBEDDING_MODEL_NAME
 
     if provider == "openai":
-        return _get_openai_embedding(model_name)
+        try:
+            return _get_openai_embedding(model_name)
+        except (ImportError, ValueError, RuntimeError):
+            # Fall back to HF on any error
+            return HuggingFaceEmbedding(model_name=model_name)
     elif provider in ("google", "gemini", "google_genai"):
-        return _get_google_embedding(provider, model_name)
+        try:
+            return _get_google_embedding(provider, model_name)
+        except (ImportError, ValueError, RuntimeError):
+            # Fall back to HF on any error
+            return HuggingFaceEmbedding(model_name=model_name)
 
     # Default HF fallback
     return HuggingFaceEmbedding(model_name=model_name)

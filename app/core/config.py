@@ -55,11 +55,11 @@ class Settings(BaseSettings):
 
     # Vector Embeddings Settings
     # Options: hf | openai | google
-    EMBEDDING_PROVIDER: str = "google"
-    # Default Gemini embedding model
-    EMBEDDING_MODEL_NAME: str = "gemini-embedding-001"
-    # Gemini embedding dimension (3072) - exceeds HNSW limit so uses brute force
-    EMBEDDING_DIM: int = 3072
+    EMBEDDING_PROVIDER: str = "hf"
+    # Default HuggingFace embedding model (reliable fallback)
+    EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # HuggingFace embedding dimension (384 for all-MiniLM-L6-v2)
+    EMBEDDING_DIM: int = 384
 
     # Metrics & Monitoring Settings
     METRICS_BACKEND: str = "auto"  # auto, prometheus, datadog, opentelemetry, noop

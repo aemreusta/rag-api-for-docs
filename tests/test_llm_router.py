@@ -263,7 +263,7 @@ class TestGroqProvider:
 
             # Test retrieving rate limit info
             mock_redis_client.get.return_value = json.dumps(rate_limit_info)
-            retrieved_info = provider._get_stored_rate_limit_info()
+            retrieved_info = await provider._get_stored_rate_limit_info()
             assert retrieved_info == rate_limit_info
 
     @pytest.mark.asyncio
@@ -310,7 +310,7 @@ class TestGroqProvider:
                 "timestamp": current_time - 150,  # 2.5 minutes ago
             }
             mock_redis_client.get.return_value = json.dumps(old_rate_limit_info)
-            should_skip, delay = provider._should_skip_due_to_rate_limits()
+            should_skip, delay = await provider._should_skip_due_to_rate_limits()
             assert should_skip is False  # Stale info, don't skip
 
     def test_add_jitter(self):
@@ -561,7 +561,7 @@ class TestGroqProvider:
             mock_redis_client.get.return_value = json.dumps(rate_limit_info)
 
             # Should fail immediately due to preemptive skip
-            with pytest.raises(Exception, match="Rate limit preemption"):
+            with pytest.raises(Exception, match="Rate limit preemption: retry after"):
                 await provider.complete(sample_messages)
 
             # The API should not be called due to preemptive skip

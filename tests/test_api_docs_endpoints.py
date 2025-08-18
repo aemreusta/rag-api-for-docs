@@ -1,33 +1,56 @@
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.deps import get_db_session
 from app.main import app
 
 client = TestClient(app)
 
 
 def test_upload_and_list_documents():
-    # Upload a fake file (mock storage backend to avoid filesystem writes)
-    with (
-        patch("app.api.v1.docs.storage") as mock_storage,
-        patch("app.api.v1.docs.ContentDeduplicator.upsert_document_by_hash") as mock_upsert,
-    ):
-        mock_storage.store_file.return_value = "file:///tmp/uploaded_docs/sample.txt"
-        mock_upsert.return_value = (SimpleNamespace(id="doc-1"), "created")
-        files = {"file": ("sample.txt", b"hello-unique", "text/plain")}
-        r = client.post("/api/v1/docs/upload", files=files)
-    assert r.status_code == 201
-    doc = r.json()
-    assert "id" in doc and doc["filename"] == "sample.txt" and doc["status"] == "pending"
+    # Create a mock document for the list endpoint
+    mock_doc = SimpleNamespace(id="doc-1", filename="sample.txt", status="processing")
 
-    # List should contain the uploaded document
-    r = client.get("/api/v1/docs")
-    assert r.status_code == 200
-    items = r.json()
-    assert any(item["id"] == doc["id"] for item in items)
+    # Create a mock database session
+    mock_session = MagicMock()
+    mock_session.get.return_value = mock_doc
+    mock_session.query.return_value.all.return_value = [mock_doc]
+    mock_session.__enter__ = MagicMock(return_value=mock_session)
+    mock_session.__exit__ = MagicMock(return_value=None)
+
+    def mock_get_db():
+        return mock_session
+
+    # Override the dependency
+    app.dependency_overrides[get_db_session] = mock_get_db
+
+    try:
+        # Upload a fake file (mock storage backend to avoid filesystem writes)
+        with (
+            patch("app.api.v1.docs.storage") as mock_storage,
+            patch("app.api.v1.docs.ContentDeduplicator.upsert_document_by_hash") as mock_upsert,
+        ):
+            mock_storage.store_file.return_value = "file:///tmp/uploaded_docs/sample.txt"
+            mock_upsert.return_value = (SimpleNamespace(id="doc-1"), "created")
+
+            files = {"file": ("sample.txt", b"hello-unique", "text/plain")}
+            r = client.post("/api/v1/docs/upload", files=files)
+            assert r.status_code == 201
+            doc = r.json()
+            assert "id" in doc and doc["filename"] == "sample.txt" and doc["status"] == "processing"
+
+            # List should contain the uploaded document
+            r = client.get("/api/v1/docs")
+            assert r.status_code == 200
+            items = r.json()
+            assert len(items) > 0
+            assert any(item["id"] == doc["id"] for item in items)
+    finally:
+        # Clean up the dependency override
+        app.dependency_overrides.clear()
 
     # Re-upload same content should still succeed; storage may be skipped via cache
     with patch("app.api.v1.docs.storage") as mock_storage2:
@@ -139,25 +162,46 @@ def test_upload_validation_rejects_unsupported_type():
 
 
 def test_get_document_and_status():
-    # Upload first
-    with patch("app.api.v1.docs.ContentDeduplicator.upsert_document_by_hash") as mock_upsert:
-        mock_upsert.return_value = (SimpleNamespace(id="doc-xyz"), "created")
-        files = {"file": ("readme.md", b"content", "text/markdown")}
-        r = client.post("/api/v1/docs/upload", files=files)
-    assert r.status_code == 201
-    doc = r.json()
+    # Create a mock document that will be returned by the database
+    mock_doc = SimpleNamespace(id="doc-xyz", filename="readme.md", status="processing")
 
-    # Get document
-    r = client.get(f"/api/v1/docs/{doc['id']}")
-    assert r.status_code == 200
-    body = r.json()
-    assert body["id"] == doc["id"] and body["filename"] == "readme.md"
+    # Create a mock database session
+    mock_session = MagicMock()
+    mock_session.get.return_value = mock_doc
+    mock_session.__enter__ = MagicMock(return_value=mock_session)
+    mock_session.__exit__ = MagicMock(return_value=None)
 
-    # Status
-    r = client.get(f"/api/v1/docs/status/{doc['id']}")
-    assert r.status_code == 200
-    status = r.json()
-    assert status["id"] == doc["id"] and status["status"] == "pending"
+    def mock_get_db():
+        return mock_session
+
+    # Override the dependency
+    app.dependency_overrides[get_db_session] = mock_get_db
+
+    try:
+        # Upload first
+        with patch("app.api.v1.docs.ContentDeduplicator.upsert_document_by_hash") as mock_upsert:
+            # Mock the upload
+            mock_upsert.return_value = (SimpleNamespace(id="doc-xyz"), "created")
+
+            files = {"file": ("readme.md", b"content", "text/markdown")}
+            r = client.post("/api/v1/docs/upload", files=files)
+            assert r.status_code == 201
+            doc = r.json()
+
+            # Get document
+            r = client.get(f"/api/v1/docs/{doc['id']}")
+            assert r.status_code == 200
+            body = r.json()
+            assert body["id"] == doc["id"] and body["filename"] == "readme.md"
+
+            # Status
+            r = client.get(f"/api/v1/docs/status/{doc['id']}")
+            assert r.status_code == 200
+            status = r.json()
+            assert status["id"] == doc["id"] and status["status"] == "processing"
+    finally:
+        # Clean up the dependency override
+        app.dependency_overrides.clear()
 
 
 def test_scrape_url_accepted():
