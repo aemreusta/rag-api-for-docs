@@ -49,7 +49,7 @@ def _get_google_embedding(provider: str, model_name: str) -> Any:
         raise ValueError(error_msg)
 
     try:
-        from llama_index.embeddings.google_genai import GoogleGenerativeAIEmbedding
+        from llama_index.embeddings.google import GeminiEmbedding
 
         # Set the API key in environment if not already set
         if settings.GOOGLE_AI_STUDIO_API_KEY and not os.environ.get("GOOGLE_API_KEY"):
@@ -59,23 +59,10 @@ def _get_google_embedding(provider: str, model_name: str) -> Any:
         if not (model_id.startswith("models/") or model_id.startswith("tunedModels/")):
             model_id = f"models/{model_id}"
 
-        # Handle constructor signature differences across versions
-        try:
-            return GoogleGenerativeAIEmbedding(
-                model_name=model_id, dimensions=settings.EMBEDDING_DIM
-            )
-        except TypeError:
-            try:
-                return GoogleGenerativeAIEmbedding(
-                    model=model_id, dimensions=settings.EMBEDDING_DIM
-                )
-            except TypeError:
-                try:
-                    return GoogleGenerativeAIEmbedding(
-                        model=model_id, output_dimensionality=settings.EMBEDDING_DIM
-                    )
-                except TypeError:
-                    return GoogleGenerativeAIEmbedding(model=model_id)
+        # Initialize GeminiEmbedding with correct parameters
+        return GeminiEmbedding(
+            model_name=model_id, api_key=google_api_key, task_type="retrieval_document"
+        )
     except ImportError as e:
         error_msg = (
             f"Google embedding provider selected but required dependencies not available: {e}. "

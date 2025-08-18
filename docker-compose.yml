@@ -79,7 +79,7 @@ services:
       sh -c '
         until pg_isready -h postgres -U ${POSTGRES_USER:-postgres}; do sleep 1; done;
         echo "Ensuring langfuse database exists...";
-        psql -h postgres -U ${POSTGRES_USER:-postgres} -tc "SELECT 1 FROM pg_database WHERE datname='langfuse'" | grep -q 1 || \
+        psql -h postgres -U ${POSTGRES_USER:-postgres} -tc "SELECT 1 FROM pg_database WHERE datname='\''langfuse'\''" | grep -q 1 || \
         psql -h postgres -U ${POSTGRES_USER:-postgres} -c "CREATE DATABASE langfuse";
       '
     depends_on:
