@@ -62,12 +62,30 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-app}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
     networks: [app-network]
+
+  # One-shot init job to ensure required databases exist on every startup
+  postgres-init:
+    image: postgres:16-alpine
+    environment:
+      - PGPASSWORD=${POSTGRES_PASSWORD:-postgres}
+    command: >
+      sh -c '
+        until pg_isready -h postgres -U ${POSTGRES_USER:-postgres}; do sleep 1; done;
+        echo "Ensuring langfuse database exists...";
+        psql -h postgres -U ${POSTGRES_USER:-postgres} -tc "SELECT 1 FROM pg_database WHERE datname='langfuse'" | grep -q 1 || \
+        psql -h postgres -U ${POSTGRES_USER:-postgres} -c "CREATE DATABASE langfuse";
+      '
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [app-network]
+    restart: "no"
 
   redis:
     image: redis:7-alpine
@@ -198,6 +216,7 @@ services:
       clickhouse: {condition: service_healthy}
       minio: {condition: service_healthy}
       redis: {condition: service_healthy}
+      postgres-init: {condition: service_completed_successfully}
     networks: [app-network]
 
   langfuse-worker:
@@ -262,6 +281,7 @@ services:
       - LANGFUSE_INIT_USER_PASSWORD=${LANGFUSE_INIT_USER_PASSWORD:-gencturk123}
     depends_on:
       langfuse: {condition: service_started}          # wait for migrations
+      postgres-init: {condition: service_completed_successfully}
     networks: [app-network]
 
   # ───────────────────────────── Streamlit Demo UI ──────────────────────────────
