@@ -148,10 +148,29 @@ class IncrementalProcessor:
 
         t0 = time()
         page_text_map = {p: new_page_texts.get(p, "") for p in changes.changed_pages}
-        self._reembed_pages(page_texts=page_text_map, source_document=source_document)
-        self._metrics.record_histogram(
-            "embedding_latency_seconds", time() - t0, {"stage": "incremental_reembed"}
+
+        self._logger.info(
+            "Starting incremental re-embedding",
+            document_id=document_id,
+            changed_pages=changes.changed_pages,
+            page_count=len(page_text_map),
+            total_text_length=sum(len(text) for text in page_text_map.values()),
         )
+
+        self._reembed_pages(page_texts=page_text_map, source_document=source_document)
+        embedding_duration = time() - t0
+
+        self._metrics.record_histogram(
+            "embedding_latency_seconds", embedding_duration, {"stage": "incremental_reembed"}
+        )
+
+        self._logger.info(
+            "Incremental re-embedding completed",
+            document_id=document_id,
+            changed_pages=changes.changed_pages,
+            embedding_duration_seconds=round(embedding_duration, 3),
+        )
+
         # Also record page counters when we have texts
         pages_count = sum(1 for _, txt in page_text_map.items() if (txt or "").strip())
         if pages_count:
@@ -288,6 +307,9 @@ class IncrementalProcessor:
         for page, text in page_texts.items():
             sanitized = _sanitize_text(text)
             if not sanitized:
+                self._logger.debug(
+                    "Skipping empty page text", source_document=source_document, page_number=page
+                )
                 continue
             llama_docs.append(
                 LlamaDocument(
@@ -300,9 +322,23 @@ class IncrementalProcessor:
             )
 
         if not llama_docs:
+            self._logger.warning(
+                "No valid documents to embed",
+                source_document=source_document,
+                page_count=len(page_texts),
+            )
             return
 
+        self._logger.info(
+            "Starting document chunking",
+            source_document=source_document,
+            document_count=len(llama_docs),
+            chunk_size=512,
+            chunk_overlap=20,
+        )
+
         nodes = node_parser.get_nodes_from_documents(llama_docs)
+
         # Compute embeddings in-batch for performance
         texts: list[str] = []
         node_refs: list[Any] = []
@@ -311,14 +347,51 @@ class IncrementalProcessor:
             if content:
                 texts.append(content)
                 node_refs.append(n)
+
         if not texts:
+            self._logger.warning(
+                "No valid chunks after parsing",
+                source_document=source_document,
+                node_count=len(nodes),
+            )
             return
 
+        self._logger.info(
+            "Starting batch embedding generation",
+            source_document=source_document,
+            chunk_count=len(texts),
+            total_text_length=sum(len(text) for text in texts),
+            avg_chunk_length=round(sum(len(text) for text in texts) / len(texts), 1),
+        )
+
+        from time import time
+
+        embed_start = time()
         embeddings = embedder.get_text_embedding_batch(texts)
+        embed_duration = time() - embed_start
+
+        self._logger.info(
+            "Batch embedding generation completed",
+            source_document=source_document,
+            chunk_count=len(texts),
+            embedding_time_seconds=round(embed_duration, 3),
+            embeddings_per_second=round(len(texts) / embed_duration, 2)
+            if embed_duration > 0
+            else 0,
+        )
+
         for n, e in zip(node_refs, embeddings, strict=True):
             n.embedding = e
 
         # Add to PGVectorStore directly
+        self._logger.info(
+            "Starting vector store insertion",
+            source_document=source_document,
+            node_count=len(node_refs),
+            table_name="content_embeddings",
+        )
+
+        store_start = time()
         vector_store = PGVectorStore.from_params(
             database=settings.POSTGRES_DB,
             host=settings.POSTGRES_SERVER,
@@ -329,6 +402,15 @@ class IncrementalProcessor:
             embed_dim=settings.EMBEDDING_DIM,
         )
         vector_store.add(node_refs)
+        store_duration = time() - store_start
+
+        self._logger.info(
+            "Vector store insertion completed",
+            source_document=source_document,
+            node_count=len(node_refs),
+            insertion_time_seconds=round(store_duration, 3),
+            table_name="content_embeddings",
+        )
 
 
 def _sanitize_text(text: str) -> str:

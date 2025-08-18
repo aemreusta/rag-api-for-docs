@@ -13,7 +13,7 @@ from app.core.cache import get_cache_backend
 from app.core.dedup import ContentDeduplicator, compute_sha256_hex
 from app.core.incremental import ChangeSet, IncrementalProcessor
 from app.core.jobs import celery_app, process_document_async
-from app.core.logging_config import get_logger
+from app.core.logging_config import get_logger, get_request_id, get_trace_id
 from app.core.metrics import get_metrics_backend
 from app.core.quality import QualityAssurance
 from app.core.storage import get_storage_backend
@@ -126,15 +126,40 @@ async def upload_document(
     except Exception:
         pass
 
-    # Enqueue background processing
+    # Enqueue background processing with correlation IDs
     try:
         job_id = str(uuid.uuid4())
-        process_document_async.delay(job_id, {"document_id": doc.id, "storage_uri": storage_uri})
+        request_id = get_request_id()
+        trace_id = get_trace_id()
+
+        # Include correlation IDs in the job data for proper tracing
+        job_data = {
+            "document_id": doc.id,
+            "storage_uri": storage_uri,
+            "request_id": request_id,
+            "trace_id": trace_id,
+            "parent_operation": "document_upload",
+        }
+
+        process_document_async.delay(job_id, job_data)
+
         logger.info(
-            "upload_enqueued", extra={"doc_id": doc.id, "filename": file.filename, "job_id": job_id}
+            "Document processing job enqueued",
+            doc_id=doc.id,
+            filename=file.filename,
+            job_id=job_id,
+            request_id=request_id,
+            trace_id=trace_id,
+            storage_uri=storage_uri,
         )
-    except Exception:
-        logger.warning("failed_to_enqueue_background_job", extra={"doc_id": doc.id})
+    except Exception as e:
+        logger.error(
+            "Failed to enqueue background job",
+            doc_id=doc.id,
+            filename=file.filename,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
     metrics.increment_counter("vector_search_requests_total", {"status": "ingest"})
     return DocumentDetail(id=doc.id, filename=file.filename, status="processing")
 

@@ -8,6 +8,7 @@ broker and result backend. Tasks are defined in follow-up edits.
 from __future__ import annotations
 
 import io
+import os
 
 from celery import Celery
 from sqlalchemy import create_engine
@@ -139,8 +140,30 @@ def _process_chunks_and_embeddings(
     session, doc: Document, file_text: str, page_texts: dict[int, str]
 ) -> None:
     """Process chunks and generate embeddings."""
+    import time
+
+    start_time = time.time()
+
+    logger.info(
+        "Starting chunk processing",
+        document_id=doc.id,
+        filename=doc.filename,
+        text_length=len(file_text) if file_text else 0,
+        page_count=len(page_texts),
+    )
+
     # Chunk using the same chunker implementation as ingestion
-    chunks = NLTKAdaptiveChunker().chunk(file_text) if file_text else []
+    chunker = NLTKAdaptiveChunker()
+    chunks = chunker.chunk(file_text) if file_text else []
+
+    logger.info(
+        "Text chunking completed",
+        document_id=doc.id,
+        chunk_count=len(chunks),
+        avg_chunk_length=(
+            round(sum(len(chunk) for chunk in chunks) / len(chunks), 1) if chunks else 0
+        ),
+    )
 
     # Upsert chunks
     dedup = ContentDeduplicator()
@@ -158,6 +181,7 @@ def _process_chunks_and_embeddings(
             }
         )
     if prepared:
+        chunk_start = time.time()
         dedup.upsert_chunks(
             session,
             document_id=doc.id,
@@ -166,6 +190,14 @@ def _process_chunks_and_embeddings(
                 type("CI", (), ci)()
                 for ci in prepared  # type: ignore[misc]
             ],
+        )
+        chunk_duration = time.time() - chunk_start
+
+        logger.info(
+            "Chunks upserted",
+            document_id=doc.id,
+            prepared_chunk_count=len(prepared),
+            upsert_time_seconds=round(chunk_duration, 3),
         )
 
     # Embed changed content via incremental processor
@@ -181,11 +213,28 @@ def _process_chunks_and_embeddings(
                 or getattr(embedder, "dimensions", None),
             },
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "Failed to log embedding provider info", error=str(e), error_type=type(e).__name__
+        )
+
+    embed_start = time.time()
     proc = IncrementalProcessor()
     # Pass the actual per-page texts extracted from PDF or fallback to single page
     proc._reembed_pages(page_texts=page_texts or {1: file_text}, source_document=doc.filename)  # type: ignore[attr-defined]
+    embed_duration = time.time() - embed_start
+
+    total_duration = time.time() - start_time
+
+    logger.info(
+        "Document processing completed",
+        document_id=doc.id,
+        filename=doc.filename,
+        total_processing_time_seconds=round(total_duration, 3),
+        embedding_time_seconds=round(embed_duration, 3),
+        chunk_count=len(chunks),
+        page_count=len(page_texts),
+    )
 
 
 @celery_app.task(bind=True, max_retries=3, name="jobs.process_document_async")
@@ -194,13 +243,26 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
 
     Minimal v1: chunk via ingestion engine, dedup/update chunks, embed via IncrementalProcessor.
     """
+    # Extract correlation IDs from job data if available
+    request_id = document_data.get("request_id")
+    trace_id = document_data.get("trace_id", job_id)
+    parent_operation = document_data.get("parent_operation", "unknown")
+
     # Initialize correlation IDs for worker task context
-    set_request_id()
-    set_trace_id(job_id)
+    if request_id:
+        set_request_id(request_id)
+    else:
+        set_request_id()
+    set_trace_id(trace_id)
 
     logger.info(
-        "process_document_async invoked",
-        extra={"job_id": job_id, "payload_keys": list(document_data.keys())},
+        "Document processing task started",
+        job_id=job_id,
+        request_id=request_id,
+        trace_id=trace_id,
+        parent_operation=parent_operation,
+        payload_keys=list(document_data.keys()),
+        worker_pid=os.getpid(),
     )
     # DB session (worker-safe)
     db_url = f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_SERVER}:5432/{settings.POSTGRES_DB}"
@@ -244,10 +306,43 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
         except Exception:
             pass
         session.commit()
-        return {"job_id": job_id, "status": "completed", "document_id": doc.id}
+
+        logger.info(
+            "Document processing task completed successfully",
+            job_id=job_id,
+            document_id=doc.id,
+            filename=doc.filename,
+            request_id=request_id,
+            trace_id=trace_id,
+            parent_operation=parent_operation,
+        )
+
+        return {
+            "job_id": job_id,
+            "status": "completed",
+            "document_id": doc.id,
+            "request_id": request_id,
+            "trace_id": trace_id,
+        }
     except Exception as e:
-        logger.exception("process_document_async_failed", error=str(e))
-        return {"job_id": job_id, "status": "failed", "error": str(e)}
+        logger.error(
+            "Document processing task failed",
+            job_id=job_id,
+            document_id=doc_id,
+            request_id=request_id,
+            trace_id=trace_id,
+            parent_operation=parent_operation,
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
+        return {
+            "job_id": job_id,
+            "status": "failed",
+            "error": str(e),
+            "request_id": request_id,
+            "trace_id": trace_id,
+        }
     finally:
         session.close()
 
@@ -255,10 +350,32 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
 @celery_app.task(bind=True, max_retries=5, retry_backoff=True, name="jobs.scrape_url_async")
 def scrape_url_async(self, job_id: str, url: str, options: dict | None = None) -> dict:
     """Background URL scraping task (stub)."""
-    logger.info(
-        "scrape_url_async invoked", extra={"job_id": job_id, "url": url, "options": options or {}}
+    # Handle correlation IDs if provided in options
+    request_id = options.get("request_id") if options else None
+    trace_id = options.get("trace_id", job_id) if options else job_id
+    parent_operation = (
+        options.get("parent_operation", "url_scraping") if options else "url_scraping"
     )
-    return {"job_id": job_id, "status": "queued"}
+
+    # Initialize correlation IDs for worker task context
+    if request_id:
+        set_request_id(request_id)
+    else:
+        set_request_id()
+    set_trace_id(trace_id)
+
+    logger.info(
+        "URL scraping task started",
+        job_id=job_id,
+        url=url,
+        request_id=request_id,
+        trace_id=trace_id,
+        parent_operation=parent_operation,
+        options=options or {},
+        worker_pid=os.getpid(),
+    )
+
+    return {"job_id": job_id, "status": "queued", "request_id": request_id, "trace_id": trace_id}
 
 
 @celery_app.task(name="jobs.cleanup_failed_jobs")

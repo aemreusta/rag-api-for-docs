@@ -24,9 +24,12 @@ def test_default_embedding_is_gemini_google():
         patch.dict(sys.modules, {"llama_index.embeddings.google_genai": mock_module}),
     ):
         model = get_embedding_model()
-        # Should get the mocked newer Google embedding without deprecation warnings
+        # Should get LoggedEmbeddingWrapper containing the mocked Google embedding
+        from app.core.embeddings import LoggedEmbeddingWrapper
+
+        assert isinstance(model, LoggedEmbeddingWrapper)
         assert model is not None
-        assert hasattr(model, "aget_query_embedding")
+        assert hasattr(model, "_aget_query_embedding")
 
 
 def test_fallback_to_hf_when_google_unavailable():
@@ -37,10 +40,13 @@ def test_fallback_to_hf_when_google_unavailable():
         patch.object(settings, "EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2"),
     ):
         model = get_embedding_model()
-        # Should get HuggingFaceEmbedding instance
+        # Should get LoggedEmbeddingWrapper containing HuggingFaceEmbedding instance
         from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
-        assert isinstance(model, HuggingFaceEmbedding)
+        from app.core.embeddings import LoggedEmbeddingWrapper
+
+        assert isinstance(model, LoggedEmbeddingWrapper)
+        assert isinstance(model._embedding, HuggingFaceEmbedding)
 
 
 def test_default_hf_embedding_selected():
