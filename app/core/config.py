@@ -58,8 +58,8 @@ class Settings(BaseSettings):
     EMBEDDING_PROVIDER: str = "google"
     # Default Gemini embedding model
     EMBEDDING_MODEL_NAME: str = "gemini-embedding-001"
-    # Default dimension aligned with pgvector HNSW limit (≤2000)
-    EMBEDDING_DIM: int = 1536
+    # Gemini embedding dimension (3072) - exceeds HNSW limit so uses brute force
+    EMBEDDING_DIM: int = 3072
 
     # Metrics & Monitoring Settings
     METRICS_BACKEND: str = "auto"  # auto, prometheus, datadog, opentelemetry, noop
