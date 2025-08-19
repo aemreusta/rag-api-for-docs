@@ -79,45 +79,18 @@ fsspec==2025.7.0
     #   huggingface-hub
     #   llama-index-core
     #   torch
-google-ai-generativelanguage==0.6.4
-    # via google-generativeai
-google-api-core==2.25.1
-    # via
-    #   google-ai-generativelanguage
-    #   google-api-python-client
-    #   google-generativeai
-google-api-python-client==2.178.0
-    # via google-generativeai
 google-auth==2.40.3
-    # via
-    #   google-ai-generativelanguage
-    #   google-api-core
-    #   google-api-python-client
-    #   google-auth-httplib2
-    #   google-genai
-    #   google-generativeai
-google-auth-httplib2==0.2.0
-    # via google-api-python-client
+    # via google-genai
 google-genai==1.29.0
-    # via llama-index-llms-google-genai
-google-generativeai==0.5.4
-    # via llama-index-embeddings-google
-googleapis-common-protos==1.70.0
     # via
-    #   google-api-core
-    #   grpcio-status
+    #   llama-index-embeddings-google-genai
+    #   llama-index-llms-google-genai
 greenlet==3.2.4
     # via sqlalchemy
 griffe==1.11.1
     # via banks
 groq==0.31.0
     # via -r requirements/requirements-ml.in
-grpcio==1.74.0
-    # via
-    #   google-api-core
-    #   grpcio-status
-grpcio-status==1.62.3
-    # via google-api-core
 h11==0.16.0
     # via httpcore
 hf-xet==1.1.7
@@ -126,10 +99,6 @@ html2text==2025.4.15
     # via -r requirements/requirements-ml.in
 httpcore==1.0.9
     # via httpx
-httplib2==0.22.0
-    # via
-    #   google-api-python-client
-    #   google-auth-httplib2
 httpx==0.28.1
     # via
     #   google-genai
@@ -181,7 +150,7 @@ llama-index-core==0.13.1
     #   llama-index
     #   llama-index-callbacks-langfuse
     #   llama-index-cli
-    #   llama-index-embeddings-google
+    #   llama-index-embeddings-google-genai
     #   llama-index-embeddings-huggingface
     #   llama-index-embeddings-openai
     #   llama-index-indices-managed-llama-cloud
@@ -192,7 +161,7 @@ llama-index-core==0.13.1
     #   llama-index-readers-file
     #   llama-index-readers-llama-parse
     #   llama-index-vector-stores-postgres
-llama-index-embeddings-google==0.4.0
+llama-index-embeddings-google-genai==0.3.0
     # via -r requirements/requirements-ml.in
 llama-index-embeddings-huggingface==0.6.0
     # via -r requirements/requirements-ml.in
@@ -289,18 +258,6 @@ propcache==0.3.2
     # via
     #   aiohttp
     #   yarl
-proto-plus==1.26.1
-    # via
-    #   google-ai-generativelanguage
-    #   google-api-core
-protobuf==4.25.8
-    # via
-    #   google-ai-generativelanguage
-    #   google-api-core
-    #   google-generativeai
-    #   googleapis-common-protos
-    #   grpcio-status
-    #   proto-plus
 psycopg2-binary==2.9.10
     # via llama-index-vector-stores-postgres
 pyasn1==0.6.1
@@ -313,7 +270,6 @@ pydantic==2.11.7
     # via
     #   banks
     #   google-genai
-    #   google-generativeai
     #   groq
     #   langfuse
     #   llama-cloud
@@ -324,8 +280,6 @@ pydantic==2.11.7
     #   openai
 pydantic-core==2.33.2
     # via pydantic
-pyparsing==3.2.3
-    # via httplib2
 pypdf==5.9.0
     # via llama-index-readers-file
 python-dateutil==2.9.0.post0
@@ -346,7 +300,6 @@ regex==2025.7.34
     #   transformers
 requests==2.32.4
     # via
-    #   google-api-core
     #   google-genai
     #   huggingface-hub
     #   langfuse
@@ -399,7 +352,6 @@ torch==2.8.0
     # via sentence-transformers
 tqdm==4.67.1
     # via
-    #   google-generativeai
     #   huggingface-hub
     #   llama-index-core
     #   nltk
@@ -417,7 +369,6 @@ typing-extensions==4.14.1
     #   anyio
     #   beautifulsoup4
     #   google-genai
-    #   google-generativeai
     #   groq
     #   huggingface-hub
     #   llama-index-core
@@ -438,8 +389,6 @@ typing-inspection==0.4.1
     # via pydantic
 tzdata==2025.2
     # via pandas
-uritemplate==4.2.0
-    # via google-api-python-client
 urllib3==2.5.0
     # via requests
 websockets==15.0.1

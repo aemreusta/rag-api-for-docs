@@ -14,7 +14,7 @@ groq
 openai
 
 # Embedding Provider Integrations
-llama-index-embeddings-google
+llama-index-embeddings-google-genai
 llama-index-embeddings-huggingface
 
 # LlamaIndex Extensions
