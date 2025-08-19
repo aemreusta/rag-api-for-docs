@@ -64,6 +64,7 @@ from pydantic import PrivateAttr
 from app.core.config import settings
 from app.core.logging_config import get_logger
 from app.core.metrics import VectorSearchMetrics
+from app.core.request_tracking import get_request_tracker
 
 # LLM Router Implementation
 #
@@ -281,14 +282,11 @@ class GroqProvider(LLMProvider):
         try:
             # Store with 5-minute expiry (should be refreshed by new requests)
             redis_key = "groq:rate_limit"
-            result = self.redis_client.setex(
+            await self.redis_client.setex(
                 redis_key,
                 300,
                 json.dumps(rate_limit_info),  # 5 minutes TTL
             )
-            # Handle both async and sync Redis clients
-            if asyncio.iscoroutine(result):
-                await result
             self.logger.debug("Stored Groq rate limit info in Redis", data=rate_limit_info)
         except Exception as e:
             self.logger.warning("Failed to store rate limit info in Redis", error=str(e))
@@ -300,12 +298,7 @@ class GroqProvider(LLMProvider):
 
         try:
             redis_key = "groq:rate_limit"
-            result = self.redis_client.get(redis_key)
-            # Handle both async and sync Redis clients
-            if asyncio.iscoroutine(result):
-                stored_data = await result
-            else:
-                stored_data = result
+            stored_data = await self.redis_client.get(redis_key)
             if stored_data:
                 return json.loads(stored_data)
         except Exception as e:
@@ -866,32 +859,21 @@ class LLMRouter(CustomLLM):
         # Initialize logger for this instance
         self._logger = get_logger("app.core.llm_router")
 
-        # Initialize Redis client for caching failed providers
+        # Initialize request tracker
+        self._tracker = get_request_tracker()
+
+        # Initialize async Redis client for caching failed providers
         try:
             if _HAS_REDIS:
-                self._redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
-                # Validate connection by trying to ping (handle both sync/async clients)
-                try:
-                    ping_result = self._redis_client.ping()
-                    if asyncio.iscoroutine(ping_result):
-                        try:
-                            loop = asyncio.get_event_loop()
-                            loop.run_until_complete(ping_result)
-                        except RuntimeError:
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                            try:
-                                loop.run_until_complete(ping_result)
-                            finally:
-                                loop.close()
-                    logger.info("Redis connection established for LLM Router")
-                except Exception:
-                    # If ping fails, disable Redis usage gracefully
-                    self._redis_client = None
+                # Use async Redis client consistently
+                import redis.asyncio as aioredis
+
+                self._redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+                logger.info("Async Redis client initialized for LLM Router")
             else:
                 self._redis_client = None
         except Exception as e:
-            logger.error("Failed to connect to Redis for LLM Router", error=str(e))
+            logger.error("Failed to initialize Redis client for LLM Router", error=str(e))
             self._redis_client = None
 
         # Initialize providers in priority order
@@ -956,31 +938,22 @@ class LLMRouter(CustomLLM):
         """Generate cache key for failed provider."""
         return f"failed_provider:{provider.provider_type.value}:{model}:{error_type.value}"
 
-    def _is_provider_cached_as_failed(self, provider: LLMProvider, error_type: ErrorType) -> bool:
-        """Check if provider is cached as failed (supports sync/async Redis)."""
+    async def _is_provider_cached_as_failed(
+        self, provider: LLMProvider, error_type: ErrorType
+    ) -> bool:
+        """Check if provider is cached as failed using async Redis."""
         if not self._redis_client:
             return False
 
         cache_key = self._get_cache_key(provider, provider.get_model_name(), error_type)
         try:
-            result = self._redis_client.exists(cache_key)
-            if asyncio.iscoroutine(result):
-                try:
-                    loop = asyncio.get_event_loop()
-                    result = loop.run_until_complete(result)
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        result = loop.run_until_complete(result)
-                    finally:
-                        loop.close()
+            result = await self._redis_client.exists(cache_key)
             return bool(result)
         except Exception:
             return False
 
-    def _cache_provider_failure(self, provider: LLMProvider, error_type: ErrorType) -> None:
-        """Cache provider failure in Redis (supports sync/async Redis)."""
+    async def _cache_provider_failure(self, provider: LLMProvider, error_type: ErrorType) -> None:
+        """Cache provider failure in async Redis."""
         if not self._redis_client:
             return
 
@@ -993,20 +966,11 @@ class LLMRouter(CustomLLM):
         }
 
         try:
-            result = self._redis_client.setex(
+            await self._redis_client.setex(
                 cache_key, settings.LLM_FALLBACK_CACHE_SECONDS, json.dumps(cache_data)
             )
-            if asyncio.iscoroutine(result):
-                try:
-                    loop = asyncio.get_event_loop()
-                    loop.run_until_complete(result)
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        loop.run_until_complete(result)
-                    finally:
-                        loop.close()
+        except Exception as e:
+            self.logger.warning("Failed to cache provider failure in Redis", error=str(e))
         finally:
             self.logger.warning(
                 "Provider cached as failed",
@@ -1062,18 +1026,33 @@ class LLMRouter(CustomLLM):
     async def _try_provider(
         self, provider: LLMProvider, messages: list[ChatMessage], **kwargs
     ) -> CompletionResponse:
-        """Try to get completion from a specific provider."""
-        try:
-            return await provider.complete(messages, **kwargs)
-        except Exception as e:
-            error_type = self._classify_error(e)
+        """Try to get completion from a specific provider with request tracking."""
+        async with self._tracker.track_llm_request(
+            provider=provider.provider_type.value,
+            model=provider.get_model_name(),
+            request_type="completion",
+        ) as context:
+            try:
+                response = await provider.complete(messages, **kwargs)
 
-            if self._should_trigger_fallback(e):
-                self._cache_provider_failure(provider, error_type)
+                # Add response metrics to context
+                context.update(
+                    {
+                        "message_count": len(messages),
+                        "completion_length": len(response.text) if hasattr(response, "text") else 0,
+                    }
+                )
+
+                return response
+            except Exception as e:
+                error_type = self._classify_error(e)
+
+                if self._should_trigger_fallback(e):
+                    await self._cache_provider_failure(provider, error_type)
+                    raise
+
+                # Re-raise the error if it shouldn't trigger fallback
                 raise
-
-            # Re-raise the error if it shouldn't trigger fallback
-            raise
 
     def _apply_model_preference(self, preferred_model: str | None) -> list[LLMProvider]:
         """Reorder or filter providers based on preferred model alias.
@@ -1121,7 +1100,7 @@ class LLMRouter(CustomLLM):
         for provider in provider_order:
             # Skip providers that are cached as failed
             error_type = ErrorType.TIMEOUT  # Default error type for checking cache
-            if self._is_provider_cached_as_failed(provider, error_type):
+            if await self._is_provider_cached_as_failed(provider, error_type):
                 self.logger.info(
                     "Skipping cached failed provider",
                     provider=provider.provider_type.value,
@@ -1177,7 +1156,7 @@ class LLMRouter(CustomLLM):
         for provider in provider_order:
             # Skip providers that are cached as failed
             error_type = ErrorType.TIMEOUT  # Default error type for checking cache
-            if self._is_provider_cached_as_failed(provider, error_type):
+            if await self._is_provider_cached_as_failed(provider, error_type):
                 self.logger.info(
                     "Skipping cached failed provider for streaming",
                     provider=provider.provider_type.value,

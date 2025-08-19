@@ -24,6 +24,7 @@ from app.core.embeddings import get_embedding_model
 from app.core.llm_router import LLMRouter
 from app.core.logging_config import get_logger
 from app.core.metrics import vector_metrics
+from app.core.request_tracking import get_request_tracker
 
 logger = get_logger(__name__)
 
@@ -34,87 +35,48 @@ class LoggedVectorStoreWrapper:
     def __init__(self, vector_store: PGVectorStore):
         self._vector_store = vector_store
         self._logger = get_logger(f"{__name__}.vector_store")
+        self._tracker = get_request_tracker()
 
     def add(self, nodes):
-        """Add nodes to vector store with logging."""
-        start_time = time.time()
+        """Add nodes to vector store with comprehensive tracking."""
         node_count = len(nodes) if nodes else 0
 
-        try:
-            self._logger.info(
-                "Vector store insertion started",
-                operation="add",
-                node_count=node_count,
-                table_name="content_embeddings",
-            )
-
+        with self._tracker.track_vector_operation(
+            operation="add", collection="content_embeddings"
+        ) as context:
             result = self._vector_store.add(nodes)
-            duration_ms = round((time.time() - start_time) * 1000, 2)
 
-            self._logger.info(
-                "Vector store insertion completed",
-                operation="add",
-                node_count=node_count,
-                response_time_ms=duration_ms,
-                table_name="content_embeddings",
+            # Add metrics to context
+            context.update(
+                {
+                    "node_count": node_count,
+                    "table_name": "content_embeddings",
+                }
             )
 
             return result
-        except Exception as e:
-            duration_ms = round((time.time() - start_time) * 1000, 2)
-
-            self._logger.error(
-                "Vector store insertion failed",
-                operation="add",
-                node_count=node_count,
-                response_time_ms=duration_ms,
-                error=str(e),
-                error_type=type(e).__name__,
-                table_name="content_embeddings",
-            )
-            raise
 
     def query(self, query, **kwargs):
-        """Query vector store with logging."""
-        start_time = time.time()
+        """Query vector store with comprehensive tracking."""
         similarity_top_k = kwargs.get("similarity_top_k", 2)
 
-        try:
-            self._logger.info(
-                "Vector store query started",
-                operation="query",
-                similarity_top_k=similarity_top_k,
-                query_length=len(str(query)) if query else 0,
-                table_name="content_embeddings",
-            )
-
+        with self._tracker.track_vector_operation(
+            operation="query", collection="content_embeddings", query_type="similarity"
+        ) as context:
             result = self._vector_store.query(query, **kwargs)
-            duration_ms = round((time.time() - start_time) * 1000, 2)
             result_count = len(result.nodes) if hasattr(result, "nodes") and result.nodes else 0
 
-            self._logger.info(
-                "Vector store query completed",
-                operation="query",
-                similarity_top_k=similarity_top_k,
-                result_count=result_count,
-                response_time_ms=duration_ms,
-                table_name="content_embeddings",
+            # Add metrics to context
+            context.update(
+                {
+                    "similarity_top_k": similarity_top_k,
+                    "query_length": len(str(query)) if query else 0,
+                    "result_count": result_count,
+                    "table_name": "content_embeddings",
+                }
             )
 
             return result
-        except Exception as e:
-            duration_ms = round((time.time() - start_time) * 1000, 2)
-
-            self._logger.error(
-                "Vector store query failed",
-                operation="query",
-                similarity_top_k=similarity_top_k,
-                response_time_ms=duration_ms,
-                error=str(e),
-                error_type=type(e).__name__,
-                table_name="content_embeddings",
-            )
-            raise
 
     def delete(self, ref_doc_id, **kwargs):
         """Delete from vector store with logging."""

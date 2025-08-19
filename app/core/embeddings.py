@@ -9,6 +9,7 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 from app.core.config import settings
 from app.core.logging_config import get_logger
+from app.core.request_tracking import get_request_tracker
 
 logger = get_logger(__name__)
 
@@ -22,6 +23,7 @@ class LoggedEmbeddingWrapper(BaseEmbedding):
         self._provider = provider
         self._model_name = model_name
         self._logger = get_logger(f"{__name__}.{provider}")
+        self._tracker = get_request_tracker()
 
     def _get_query_embedding(self, query: str) -> list[float]:
         """Get embedding for a query with logging."""
@@ -66,40 +68,22 @@ class LoggedEmbeddingWrapper(BaseEmbedding):
             return self._get_query_embedding(query)
 
     def _get_text_embedding(self, text: str) -> list[float]:
-        """Get embedding for a single text with logging."""
-        start_time = time.time()
-        input_size = len(text)
-
-        try:
+        """Get embedding for a single text with comprehensive tracking."""
+        with self._tracker.track_embedding_request(
+            provider=self._provider, model=self._model_name, input_type="text", batch_size=1
+        ) as context:
             embedding = self._embedding.get_text_embedding(text)
-            duration_ms = round((time.time() - start_time) * 1000, 2)
 
-            self._logger.info(
-                "Embedding API request completed",
-                provider=self._provider,
-                model=self._model_name,
-                input_size_chars=input_size,
-                input_size_tokens=self._estimate_tokens(text),
-                response_time_ms=duration_ms,
-                output_dimensions=len(embedding) if embedding else 0,
-                request_type="single_text",
+            # Add detailed metrics to context
+            context.update(
+                {
+                    "input_size_chars": len(text),
+                    "input_size_tokens": self._estimate_tokens(text),
+                    "output_dimensions": len(embedding) if embedding else 0,
+                }
             )
 
             return embedding
-        except Exception as e:
-            duration_ms = round((time.time() - start_time) * 1000, 2)
-
-            self._logger.error(
-                "Embedding API request failed",
-                provider=self._provider,
-                model=self._model_name,
-                input_size_chars=input_size,
-                response_time_ms=duration_ms,
-                error=str(e),
-                error_type=type(e).__name__,
-                request_type="single_text",
-            )
-            raise
 
     def get_text_embedding(self, text: str) -> list[float]:
         """Public interface for getting text embeddings."""

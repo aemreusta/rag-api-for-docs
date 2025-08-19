@@ -706,14 +706,15 @@ class TestLLMRouter:
             assert router._should_trigger_fallback(Exception("400 Bad Request")) is False
             assert router._should_trigger_fallback(Exception("malformed request")) is False
 
-    def test_provider_caching(self, mock_redis, mock_settings):
+    @pytest.mark.asyncio
+    async def test_provider_caching(self, mock_redis, mock_settings):
         """Test caching of failed providers."""
         with patch("app.core.llm_router.redis.from_url", return_value=mock_redis):
             router = LLMRouter()
             provider = GroqProvider()
 
             # Test caching a failure
-            router._cache_provider_failure(provider, ErrorType.TIMEOUT)
+            await router._cache_provider_failure(provider, ErrorType.TIMEOUT)
 
             expected_key = "failed_provider:groq:llama3-70b-8192:timeout"
             mock_redis.setex.assert_called_once()
@@ -727,7 +728,8 @@ class TestLLMRouter:
             assert cached_data["error_type"] == "timeout"
             assert "timestamp" in cached_data
 
-    def test_provider_cache_check(self, mock_redis, mock_settings):
+    @pytest.mark.asyncio
+    async def test_provider_cache_check(self, mock_redis, mock_settings):
         """Test checking if provider is cached as failed."""
         mock_redis.exists.return_value = 1  # Provider is cached
 
@@ -735,7 +737,7 @@ class TestLLMRouter:
             router = LLMRouter()
             provider = GroqProvider()
 
-            is_cached = router._is_provider_cached_as_failed(provider, ErrorType.TIMEOUT)
+            is_cached = await router._is_provider_cached_as_failed(provider, ErrorType.TIMEOUT)
             assert is_cached is True
 
             expected_key = "failed_provider:groq:llama3-70b-8192:timeout"

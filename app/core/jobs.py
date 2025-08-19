@@ -22,6 +22,7 @@ from app.core.ingestion import NLTKAdaptiveChunker
 from app.core.language_detection import detect_document_language
 from app.core.logging_config import get_logger, set_request_id, set_trace_id, setup_logging
 from app.core.metadata import ChunkMetadataExtractor
+from app.core.request_tracking import get_request_tracker
 from app.core.storage import get_storage_backend
 from app.db.models import Document
 
@@ -359,12 +360,15 @@ def _process_chunks_and_embeddings(
 
 @celery_app.task(bind=True, max_retries=3, name="jobs.process_document_async")
 def process_document_async(self, job_id: str, document_data: dict) -> dict:
-    """Background document processing task.
+    """Background document processing task with comprehensive tracking.
 
     Minimal v1: chunk via ingestion engine, dedup/update chunks, embed via IncrementalProcessor.
     """
     # Initialize correlation IDs for worker task context
     request_id, trace_id, parent_operation = _init_task_context_from_job(document_data, job_id)
+
+    # Initialize request tracker
+    tracker = get_request_tracker()
 
     logger.info(
         "Document processing task started",
@@ -387,17 +391,32 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
         if not doc:
             return {"job_id": job_id, "status": "failed", "error": "document_not_found"}
 
-        # Fetch file contents and extract text with metadata
-        file_text, page_texts, metadata = _safe_retrieve_and_extract(doc, storage_uri)
+        # Wrap main processing with comprehensive tracking
+        with tracker.track_document_processing(
+            document_id=doc.id, stage="full_processing", filename=doc.filename
+        ) as context:
+            # Fetch file contents and extract text with metadata
+            file_text, page_texts, metadata = _safe_retrieve_and_extract(doc, storage_uri)
 
-        # Update document metadata
-        _update_document_metadata_from_extraction(doc, metadata, during="processing")
+            # Update document metadata
+            _update_document_metadata_from_extraction(doc, metadata, during="processing")
 
-        # Detect and update document language
-        _detect_and_update_language(doc, file_text)
+            # Detect and update document language
+            _detect_and_update_language(doc, file_text)
 
-        # Process chunks and embeddings
-        _process_chunks_and_embeddings(session, doc, file_text, page_texts)
+            # Process chunks and embeddings
+            _process_chunks_and_embeddings(session, doc, file_text, page_texts)
+
+            # Add processing metrics to context
+            context.update(
+                {
+                    "page_count": metadata.get("page_count", 0),
+                    "word_count": metadata.get("word_count", 0),
+                    "text_length": len(file_text) if file_text else 0,
+                    "page_texts_count": len(page_texts),
+                    "detected_language": doc.language,
+                }
+            )
 
         # Mark document completed
         _mark_status(session, doc, "COMPLETED")
