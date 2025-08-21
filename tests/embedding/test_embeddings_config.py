@@ -83,7 +83,7 @@ def test_default_qwen3_embedding_selected():
         patch.object(settings, "EMBEDDING_PROVIDER", "qwen3"),
         patch.object(settings, "EMBEDDING_MODEL_NAME", "Qwen/Qwen3-Embedding-0.6B"),
         patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", ""),
-        patch("app.core.embeddings.Qwen3EmbeddingLocal") as mock_qwen_local,
+        patch("app.core.qwen3_embedding.Qwen3EmbeddingLocal") as mock_qwen_local,
     ):
         mock_instance = MagicMock()
         mock_qwen_local.return_value = mock_instance

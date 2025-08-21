@@ -102,7 +102,7 @@ class TestEmbeddingProviderValidation:
             patch.object(settings, "EMBEDDING_PROVIDER", "qwen3"),
             patch.object(settings, "EMBEDDING_MODEL_NAME", "Qwen/Qwen3-Embedding-0.6B"),
             patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", ""),
-            patch("app.core.embeddings.Qwen3EmbeddingLocal") as mock_local,
+            patch("app.core.qwen3_embedding.Qwen3EmbeddingLocal") as mock_local,
         ):
             # Mock the local embedding to fail with missing dependencies
             mock_local.side_effect = ValueError("Service endpoint not configured")
@@ -138,7 +138,7 @@ class TestEmbeddingProviderValidation:
             patch.object(settings, "EMBEDDING_PROVIDER", "unknown_provider"),
             patch.object(settings, "EMBEDDING_MODEL_NAME", "Qwen/Qwen3-Embedding-0.6B"),
             patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", ""),
-            patch("app.core.embeddings.Qwen3EmbeddingLocal") as mock_qwen_local,
+            patch("app.core.qwen3_embedding.Qwen3EmbeddingLocal") as mock_qwen_local,
         ):
             mock_instance = MagicMock()
             mock_qwen_local.return_value = mock_instance
@@ -154,7 +154,7 @@ class TestEmbeddingProviderValidation:
             patch.object(settings, "EMBEDDING_PROVIDER", "qwen3"),
             patch.object(settings, "EMBEDDING_MODEL_NAME", "Qwen/Qwen3-Embedding-0.6B"),
             patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", ""),
-            patch("app.core.embeddings.Qwen3EmbeddingLocal") as mock_qwen_local,
+            patch("app.core.qwen3_embedding.Qwen3EmbeddingLocal") as mock_qwen_local,
         ):
             mock_instance = MagicMock()
             mock_qwen_local.return_value = mock_instance
@@ -170,7 +170,7 @@ class TestEmbeddingProviderValidation:
             patch.object(settings, "EMBEDDING_PROVIDER", "qwen3"),
             patch.object(settings, "EMBEDDING_MODEL_NAME", "Qwen/Qwen3-Embedding-0.6B"),
             patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", "http://embedding-service:8080"),
-            patch("app.core.embeddings.Qwen3Embedding") as mock_qwen_service,
+            patch("app.core.qwen3_embedding.Qwen3Embedding") as mock_qwen_service,
         ):
             mock_instance = MagicMock()
             mock_qwen_service.return_value = mock_instance
@@ -239,7 +239,7 @@ class TestErrorMessageQuality:
         with (
             patch.object(settings, "EMBEDDING_PROVIDER", "qwen3"),
             patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", ""),
-            patch("app.core.embeddings.Qwen3EmbeddingLocal") as mock_local,
+            patch("app.core.qwen3_embedding.Qwen3EmbeddingLocal") as mock_local,
         ):
             mock_local.side_effect = ValueError("Service endpoint not configured")
 

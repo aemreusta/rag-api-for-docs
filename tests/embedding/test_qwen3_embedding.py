@@ -10,7 +10,6 @@ import httpx
 import pytest
 
 from app.core.config import settings
-from app.core.qwen3_embedding import Qwen3Embedding, Qwen3EmbeddingLocal
 
 
 class TestQwen3EmbeddingLocal:
@@ -18,6 +17,8 @@ class TestQwen3EmbeddingLocal:
 
     def test_qwen3_local_initialization_success(self):
         """Test successful initialization of Qwen3 local embedding."""
+        from app.core.qwen3_embedding import Qwen3EmbeddingLocal
+
         with patch("app.core.qwen3_embedding.SentenceTransformer") as mock_st:
             mock_model = MagicMock()
             mock_st.return_value = mock_model
@@ -30,16 +31,25 @@ class TestQwen3EmbeddingLocal:
 
     def test_qwen3_local_initialization_failure(self):
         """Test failure when SentenceTransformer is not available."""
+        from app.core.qwen3_embedding import Qwen3EmbeddingLocal
+
         with patch("app.core.qwen3_embedding.SentenceTransformer") as mock_st:
             mock_st.side_effect = ImportError("sentence-transformers not installed")
 
-            with pytest.raises(ImportError) as exc_info:
-                Qwen3EmbeddingLocal(model_name="Qwen/Qwen3-Embedding-0.6B")
+            # Mock the import error that would be raised
+            with patch(
+                "builtins.__import__",
+                side_effect=ImportError("No module named 'sentence_transformers'"),
+            ):
+                with pytest.raises(ImportError) as exc_info:
+                    Qwen3EmbeddingLocal(model_name="Qwen/Qwen3-Embedding-0.6B")
 
-            assert "sentence-transformers not installed" in str(exc_info.value)
+                assert "sentence-transformers not installed" in str(exc_info.value)
 
     def test_qwen3_local_get_text_embedding(self):
         """Test getting text embedding with local model."""
+        from app.core.qwen3_embedding import Qwen3EmbeddingLocal
+
         with patch("app.core.qwen3_embedding.SentenceTransformer") as mock_st:
             mock_model = MagicMock()
             mock_model.encode.return_value = [[0.1, 0.2, 0.3, 0.4]]
@@ -53,6 +63,8 @@ class TestQwen3EmbeddingLocal:
 
     def test_qwen3_local_get_text_embedding_batch(self):
         """Test getting text embeddings in batch with local model."""
+        from app.core.qwen3_embedding import Qwen3EmbeddingLocal
+
         with patch("app.core.qwen3_embedding.SentenceTransformer") as mock_st:
             mock_model = MagicMock()
             mock_model.encode.return_value = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
@@ -71,6 +83,8 @@ class TestQwen3EmbeddingService:
 
     def test_qwen3_service_initialization_missing_endpoint(self):
         """Test initialization failure when service endpoint is not configured."""
+        from app.core.qwen3_embedding import Qwen3Embedding
+
         with patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", ""):
             with pytest.raises(ValueError) as exc_info:
                 Qwen3Embedding(model_name="Qwen/Qwen3-Embedding-0.6B")
@@ -79,6 +93,8 @@ class TestQwen3EmbeddingService:
 
     def test_qwen3_service_initialization_success(self):
         """Test successful initialization of Qwen3 service embedding."""
+        from app.core.qwen3_embedding import Qwen3Embedding
+
         with (
             patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", "http://test:8080"),
             patch.object(settings, "EMBEDDING_SERVICE_DIMENSIONS", 1024),
@@ -103,6 +119,8 @@ class TestQwen3EmbeddingService:
     @pytest.mark.asyncio
     async def test_qwen3_service_get_embeddings_success(self):
         """Test successful embedding retrieval from service."""
+        from app.core.qwen3_embedding import Qwen3Embedding
+
         with (
             patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", "http://test:8080"),
             patch("app.core.qwen3_embedding.httpx.AsyncClient") as mock_client,
@@ -128,6 +146,8 @@ class TestQwen3EmbeddingService:
     @pytest.mark.asyncio
     async def test_qwen3_service_get_embeddings_with_instruction(self):
         """Test embedding retrieval with custom instruction."""
+        from app.core.qwen3_embedding import Qwen3Embedding
+
         with (
             patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", "http://test:8080"),
             patch.object(settings, "EMBEDDING_INSTRUCTION", "Custom instruction"),
@@ -152,6 +172,8 @@ class TestQwen3EmbeddingService:
     @pytest.mark.asyncio
     async def test_qwen3_service_get_embeddings_failure(self):
         """Test embedding retrieval failure from service."""
+        from app.core.qwen3_embedding import Qwen3Embedding
+
         with (
             patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", "http://test:8080"),
             patch("app.core.qwen3_embedding.httpx.AsyncClient") as mock_client,
@@ -175,6 +197,7 @@ class TestQwen3EmbeddingIntegration:
 
     def test_qwen3_service_mode_selection(self):
         """Test that service mode is selected when endpoint is configured."""
+
         with (
             patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", "http://test:8080"),
             patch("app.core.embeddings.Qwen3Embedding") as mock_qwen_service,
@@ -191,6 +214,7 @@ class TestQwen3EmbeddingIntegration:
 
     def test_qwen3_local_mode_selection(self):
         """Test that local mode is selected when endpoint is not configured."""
+
         with (
             patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", ""),
             patch("app.core.embeddings.Qwen3EmbeddingLocal") as mock_qwen_local,
@@ -207,6 +231,7 @@ class TestQwen3EmbeddingIntegration:
 
     def test_qwen3_provider_variants(self):
         """Test that various Qwen3 provider names work."""
+
         with (
             patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", ""),
             patch("app.core.embeddings.Qwen3EmbeddingLocal") as mock_qwen_local,

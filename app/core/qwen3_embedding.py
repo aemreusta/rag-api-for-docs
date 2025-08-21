@@ -165,6 +165,14 @@ class Qwen3Embedding(BaseEmbedding):
 
         return all_embeddings
 
+    def _get_query_embedding(self, query: str) -> list[float]:
+        """Get embedding for a query (required by BaseEmbedding)."""
+        return self._get_text_embedding(query)
+
+    async def _aget_query_embedding(self, query: str) -> list[float]:
+        """Get embedding for a query asynchronously (required by BaseEmbedding)."""
+        return await self._aget_text_embedding(query)
+
     def _estimate_tokens(self, text: str) -> int:
         """Rough token estimation (4 chars = 1 token average for English)."""
         return len(text) // 4
@@ -272,3 +280,12 @@ class Qwen3EmbeddingLocal(BaseEmbedding):
                 error=str(e),
             )
             raise
+
+    def _get_query_embedding(self, query: str) -> list[float]:
+        """Get embedding for a query (required by BaseEmbedding)."""
+        return self._get_text_embedding(query)
+
+    async def _aget_query_embedding(self, query: str) -> list[float]:
+        """Get embedding for a query asynchronously (required by BaseEmbedding)."""
+        # For local model, we don't have async support, so we'll just call sync method
+        return self._get_text_embedding(query)
