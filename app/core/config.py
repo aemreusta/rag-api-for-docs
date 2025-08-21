@@ -54,12 +54,12 @@ class Settings(BaseSettings):
     MINIO_SECURE: bool = False
 
     # Vector Embeddings Settings
-    # Options: hf | openai | google
-    EMBEDDING_PROVIDER: str = "hf"
-    # Default HuggingFace embedding model (reliable fallback)
-    EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
-    # HuggingFace embedding dimension (384 for all-MiniLM-L6-v2)
-    EMBEDDING_DIM: int = 384
+    # Options: qwen3 | qwen | hf | openai | google
+    EMBEDDING_PROVIDER: str = "qwen3"
+    # Default Qwen3 embedding model
+    EMBEDDING_MODEL_NAME: str = "Qwen/Qwen3-Embedding-0.6B"
+    # Qwen3 embedding dimension (1024 for 0.6B model)
+    EMBEDDING_DIM: int = 1024
 
     # HuggingFace Embedding Service Settings (Local vLLM Server)
     EMBEDDING_SERVICE_ENDPOINT: str = ""  # e.g., http://embedding-service:8080
