@@ -296,9 +296,69 @@ def _get_google_embedding(provider: str, model_name: str) -> Any:
         raise RuntimeError(error_msg) from e
 
 
+def _get_qwen3_embedding(provider: str, model_name: str) -> Any:
+    """Initialize Qwen3 embedding with validation."""
+    start_time = time.time()
+
+    try:
+        from app.core.qwen3_embedding import Qwen3Embedding, Qwen3EmbeddingLocal
+
+        # Determine if we should use service or local model
+        use_service = bool(settings.EMBEDDING_SERVICE_ENDPOINT)
+
+        if use_service:
+            embedding = Qwen3Embedding(
+                model_name=model_name,
+                service_endpoint=settings.EMBEDDING_SERVICE_ENDPOINT,
+                dimensions=settings.EMBEDDING_SERVICE_DIMENSIONS,
+                timeout=settings.EMBEDDING_SERVICE_TIMEOUT,
+                batch_size=settings.EMBEDDING_SERVICE_BATCH_SIZE,
+            )
+            provider_name = "qwen3_service"
+        else:
+            embedding = Qwen3EmbeddingLocal(model_name=model_name)
+            provider_name = "qwen3_local"
+
+        logger.info(
+            "Embedding provider initialized",
+            provider=provider_name,
+            model=model_name,
+            initialization_time_ms=round((time.time() - start_time) * 1000, 2),
+        )
+
+        return embedding
+
+    except ImportError as e:
+        error_msg = (
+            f"Qwen3 embedding provider selected but required dependencies not available: {e}. "
+            "Please install required dependencies: pip install sentence-transformers httpx"
+        )
+        logger.error(
+            "Qwen3 embedding initialization failed",
+            provider=provider,
+            model=model_name,
+            error="missing_dependencies",
+            error_details=str(e),
+        )
+        raise ImportError(error_msg) from e
+    except Exception as e:
+        error_msg = (
+            f"Failed to initialize Qwen3 embedding provider: {e}. "
+            "Please check your configuration and model availability."
+        )
+        logger.error(
+            "Qwen3 embedding initialization failed",
+            provider=provider,
+            model=model_name,
+            error="initialization_error",
+            error_details=str(e),
+        )
+        raise RuntimeError(error_msg) from e
+
+
 def get_embedding_model() -> Any:
     """Get embedding model based on configured provider with strict validation."""
-    provider = (settings.EMBEDDING_PROVIDER or "hf").lower()
+    provider = (settings.EMBEDDING_PROVIDER or "qwen3").lower()
     model_name = settings.EMBEDDING_MODEL_NAME
     start_time = time.time()
 
@@ -309,35 +369,87 @@ def get_embedding_model() -> Any:
             embedding = _get_openai_embedding(model_name)
             return LoggedEmbeddingWrapper(embedding, "openai", model_name)
         except (ImportError, ValueError, RuntimeError) as e:
-            # Fall back to HF on any error
-            logger.warning(
-                "Embedding provider fallback to HuggingFace",
-                original_provider="openai",
-                fallback_provider="huggingface",
-                fallback_model=model_name,
-                error=str(e),
+            error_msg = (
+                f"OpenAI embedding provider failed to initialize: {e}. "
+                "This prevents silent production failures. To resolve:\n"
+                "1. Set OPENAI_API_KEY in your environment variables\n"
+                "2. Check that the API key is valid and has sufficient quota\n"
+                "3. Verify the model name is correct and available\n"
+                "4. Install required dependencies: pip install llama-index[openai]"
             )
-            embedding = HuggingFaceEmbedding(model_name=model_name)
-            logger.info(
-                "Embedding provider initialized",
-                provider="huggingface",
+            logger.error(
+                "OpenAI embedding provider initialization failed - no fallback",
+                provider="openai",
                 model=model_name,
-                initialization_time_ms=round((time.time() - start_time) * 1000, 2),
+                error=str(e),
+                error_type=type(e).__name__,
             )
-            return LoggedEmbeddingWrapper(embedding, "huggingface", model_name)
+            raise RuntimeError(error_msg) from e
     elif provider in ("google", "gemini", "google_genai"):
         try:
             embedding = _get_google_embedding(provider, model_name)
             return LoggedEmbeddingWrapper(embedding, provider, model_name)
         except (ImportError, ValueError, RuntimeError) as e:
-            # Fall back to HF on any error
-            logger.warning(
-                "Embedding provider fallback to HuggingFace",
-                original_provider=provider,
-                fallback_provider="huggingface",
-                fallback_model=model_name,
-                error=str(e),
+            error_msg = (
+                f"Google embedding provider '{provider}' failed to initialize: {e}. "
+                "This prevents silent production failures. To resolve:\n"
+                "1. Set GOOGLE_AI_STUDIO_API_KEY in your environment variables\n"
+                "2. Or set GOOGLE_API_KEY in your environment variables\n"
+                "3. Check that the API key is valid and has sufficient quota\n"
+                "4. Install required dependencies: pip install llama-index[google]"
             )
+            logger.error(
+                "Google embedding provider initialization failed - no fallback",
+                provider=provider,
+                model=model_name,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            raise RuntimeError(error_msg) from e
+    elif provider in ("qwen3", "qwen", "qwen3-embedding"):
+        try:
+            embedding = _get_qwen3_embedding(provider, model_name)
+            return LoggedEmbeddingWrapper(embedding, provider, model_name)
+        except (ImportError, ValueError, RuntimeError) as e:
+            error_msg = (
+                f"Qwen3 embedding provider '{provider}' failed to initialize: {e}. "
+                "This prevents silent production failures. To resolve:\n"
+                "1. Set EMBEDDING_SERVICE_ENDPOINT for service mode, or ensure model is available locally\n"  # noqa: E501
+                "2. Install required dependencies: pip install sentence-transformers httpx\n"
+                "3. Verify the model name is correct and available"
+            )
+            logger.error(
+                "Qwen3 embedding provider initialization failed - no fallback",
+                provider=provider,
+                model=model_name,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            raise RuntimeError(error_msg) from e
+
+    # Default HF fallback (only if explicitly set to "hf")
+    if provider == "hf":
+        embedding = HuggingFaceEmbedding(model_name=model_name)
+        logger.info(
+            "Embedding provider initialized",
+            provider="huggingface",
+            model=model_name,
+            initialization_time_ms=round((time.time() - start_time) * 1000, 2),
+        )
+        return LoggedEmbeddingWrapper(embedding, "huggingface", model_name)
+    else:
+        # If unknown provider, default to Qwen3
+        logger.warning(
+            "Unknown embedding provider, defaulting to Qwen3",
+            provider=provider,
+            fallback_provider="qwen3",
+        )
+        try:
+            embedding = _get_qwen3_embedding("qwen3", model_name)
+            return LoggedEmbeddingWrapper(embedding, "qwen3", model_name)
+        except Exception as e:
+            # Final fallback to HuggingFace
+            logger.error("Qwen3 fallback failed, using HuggingFace", error=str(e))
             embedding = HuggingFaceEmbedding(model_name=model_name)
             logger.info(
                 "Embedding provider initialized",
@@ -346,13 +458,3 @@ def get_embedding_model() -> Any:
                 initialization_time_ms=round((time.time() - start_time) * 1000, 2),
             )
             return LoggedEmbeddingWrapper(embedding, "huggingface", model_name)
-
-    # Default HF fallback
-    embedding = HuggingFaceEmbedding(model_name=model_name)
-    logger.info(
-        "Embedding provider initialized",
-        provider="huggingface",
-        model=model_name,
-        initialization_time_ms=round((time.time() - start_time) * 1000, 2),
-    )
-    return LoggedEmbeddingWrapper(embedding, "huggingface", model_name)
