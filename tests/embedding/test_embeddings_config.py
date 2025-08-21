@@ -32,9 +32,8 @@ def test_default_embedding_is_gemini_google():
         assert hasattr(model, "_aget_query_embedding")
 
 
-def test_fallback_to_hf_when_google_unavailable():
-    # Test direct fallback to HF when Google provider is not available
-    # Instead of forcing import errors (which can be flaky), test with HF directly
+def test_hf_provider_works_when_configured():
+    # Test that HF provider works when explicitly configured
     with (
         patch.object(settings, "EMBEDDING_PROVIDER", "hf"),
         patch.object(settings, "EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2"),
@@ -74,3 +73,23 @@ def test_openai_embedding_selected_when_configured():
 
         model = get_embedding_model()
         assert hasattr(model, "embed") or hasattr(model, "aget_query_embedding")
+
+
+def test_default_qwen3_embedding_selected():
+    """Test that Qwen3 is now the default embedding provider."""
+    from unittest.mock import MagicMock
+
+    with (
+        patch.object(settings, "EMBEDDING_PROVIDER", "qwen3"),
+        patch.object(settings, "EMBEDDING_MODEL_NAME", "Qwen/Qwen3-Embedding-0.6B"),
+        patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", ""),
+        patch("app.core.embeddings.Qwen3EmbeddingLocal") as mock_qwen_local,
+    ):
+        mock_instance = MagicMock()
+        mock_qwen_local.return_value = mock_instance
+
+        model = get_embedding_model()
+        from app.core.embeddings import LoggedEmbeddingWrapper
+
+        assert isinstance(model, LoggedEmbeddingWrapper)
+        mock_qwen_local.assert_called_once_with(model_name="Qwen/Qwen3-Embedding-0.6B")
