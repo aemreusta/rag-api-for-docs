@@ -11,8 +11,11 @@ fallback implementation when the attribute is absent.
 """
 
 import asyncio
+import os
+import socket
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.chat_engine import CondenseQuestionChatEngine
@@ -124,13 +127,57 @@ class LoggedVectorStoreWrapper:
 # Set up the embedding model from settings (provider/model handled in helper)
 Settings.embed_model = get_embedding_model()
 
+
+def _resolve_pg_params() -> dict[str, Any]:
+    """Resolve Postgres connection parameters for PGVectorStore.
+
+    Priority:
+    1) DATABASE_URL environment or settings.DATABASE_URL
+    2) Individual POSTGRES_* settings with local fallback when 'postgres' is not resolvable
+    """
+    db_url = os.getenv("DATABASE_URL") or getattr(settings, "DATABASE_URL", None)
+    if db_url:
+        parsed = urlparse(db_url)
+        database = (parsed.path or "/").lstrip("/") or settings.POSTGRES_DB
+        host = parsed.hostname or settings.POSTGRES_SERVER
+        port = parsed.port or 5432
+        user = parsed.username or settings.POSTGRES_USER
+        password = parsed.password or settings.POSTGRES_PASSWORD
+        return {
+            "database": database,
+            "host": host,
+            "password": password,
+            "port": port,
+            "user": user,
+        }
+
+    host = settings.POSTGRES_SERVER
+    port = 5432
+    # Fallback for local dev when running outside Docker
+    if host == "postgres":
+        try:
+            socket.getaddrinfo(host, None)
+        except OSError:
+            host = "localhost"
+            port = 15432
+
+    return {
+        "database": settings.POSTGRES_DB,
+        "host": host,
+        "password": settings.POSTGRES_PASSWORD,
+        "port": port,
+        "user": settings.POSTGRES_USER,
+    }
+
+
 # Initialize components
+_pg_params = _resolve_pg_params()
 _raw_vector_store = PGVectorStore.from_params(
-    database=settings.POSTGRES_DB,
-    host=settings.POSTGRES_SERVER,
-    password=settings.POSTGRES_PASSWORD,
-    port=5432,
-    user=settings.POSTGRES_USER,
+    database=_pg_params["database"],
+    host=_pg_params["host"],
+    password=_pg_params["password"],
+    port=_pg_params["port"],
+    user=_pg_params["user"],
     table_name="content_embeddings",
     # Embedding dimension is configurable via settings
     embed_dim=settings.EMBEDDING_DIM,
