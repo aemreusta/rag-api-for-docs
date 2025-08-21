@@ -10,13 +10,19 @@ from __future__ import annotations
 import io
 import os
 
-from celery import Celery
+try:
+    from celery import Celery  # type: ignore
+
+    _HAS_CELERY = True
+except Exception:  # pragma: no cover
+    Celery = None  # type: ignore
+    _HAS_CELERY = False
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 from app.core.dedup import ContentDeduplicator
-from app.core.embeddings import get_embedding_model
+from app.core.embedding_manager import QuotaError, get_embedding_manager
 from app.core.incremental import IncrementalProcessor
 from app.core.ingestion import NLTKAdaptiveChunker
 from app.core.language_detection import detect_document_language
@@ -33,9 +39,15 @@ logger = get_logger(__name__)
 
 def _create_session():
     """Create a SQLAlchemy session for worker context."""
+    import os
+
     db_url = (
-        f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}"
-        f"@{settings.POSTGRES_SERVER}:5432/{settings.POSTGRES_DB}"
+        os.getenv("DATABASE_URL")
+        or getattr(settings, "DATABASE_URL", None)
+        or (
+            f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}"
+            f"@{settings.POSTGRES_SERVER}:5432/{settings.POSTGRES_DB}"
+        )
     )
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=create_engine(db_url))
     return SessionLocal()
@@ -204,8 +216,19 @@ def _extract_pdf_per_page(file_bytes: bytes) -> tuple[str, dict[int, str], dict]
             return "", {}, {"page_count": 0, "word_count": 0}
 
 
-def _create_celery_app() -> Celery:
+def _create_celery_app():
     """Create and configure the Celery app instance."""
+    if not _HAS_CELERY:
+        # Lightweight stub when Celery is not installed (CI/local unit tests)
+        class _Stub:
+            def task(self, *args, **kwargs):  # noqa: D401 - simple decorator stub
+                def decorator(fn):
+                    return fn
+
+                return decorator
+
+        logger.warning("Celery not installed; using no-op task decorators for tests")
+        return _Stub()
     broker_url = settings.REDIS_URL
     result_backend = settings.REDIS_URL
 
@@ -230,8 +253,8 @@ def _create_celery_app() -> Celery:
     return app
 
 
-# Celery application singleton used by worker and beat
-celery_app: Celery = _create_celery_app()
+# Celery application singleton used by worker and beat (or stub in tests)
+celery_app = _create_celery_app()
 
 
 def _retrieve_and_extract_content(
@@ -258,7 +281,7 @@ def _retrieve_and_extract_content(
 
 
 def _process_chunks_and_embeddings(
-    session, doc: Document, file_text: str, page_texts: dict[int, str]
+    session, doc: Document, file_text: str, page_texts: dict[int, str], task_context=None
 ) -> None:
     """Process chunks and generate embeddings."""
     import time
@@ -321,29 +344,68 @@ def _process_chunks_and_embeddings(
             upsert_time_seconds=round(chunk_duration, 3),
         )
 
-    # Embed changed content via incremental processor
+    # Embed changed content via incremental processor with quota handling
     # Log embedding provider/model for observability
     try:
-        embedder = get_embedding_model()
+        embedding_manager = get_embedding_manager()
+        provider_status = embedding_manager.get_provider_status()
+
         logger.info(
-            "embedding_provider_selected",
-            extra={
-                "provider": type(embedder).__name__,
-                "model": getattr(embedder, "model_name", getattr(embedder, "model", None)),
-                "dim": getattr(embedder, "embed_dim", None)
-                or getattr(embedder, "dimensions", None),
-            },
+            "embedding_providers_status", provider_status=provider_status, document_id=doc.id
         )
+
+        # Check if any provider is available
+        available_providers = [p for p, s in provider_status.items() if s.get("available", False)]
+        if not available_providers:
+            # Calculate minimum wait time
+            min_wait = min(
+                [
+                    s.get("wait_seconds", 0)
+                    for s in provider_status.values()
+                    if s.get("wait_seconds", 0) > 0
+                ]
+                or [3600]
+            )
+            raise QuotaError(f"All embedding providers quota exhausted. Minimum wait: {min_wait}s")
+
     except Exception as e:
         logger.warning(
-            "Failed to log embedding provider info", error=str(e), error_type=type(e).__name__
+            "Failed to get embedding provider status", error=str(e), error_type=type(e).__name__
         )
 
     embed_start = time.time()
-    proc = IncrementalProcessor()
-    # Pass the actual per-page texts extracted from PDF or fallback to single page
-    proc._reembed_pages(page_texts=page_texts or {1: file_text}, source_document=doc.filename)  # type: ignore[attr-defined]
-    embed_duration = time.time() - embed_start
+
+    try:
+        proc = IncrementalProcessor()
+        # Pass the actual per-page texts extracted from PDF or fallback to single page
+        proc._reembed_pages(page_texts=page_texts or {1: file_text}, source_document=doc.filename)  # type: ignore[attr-defined]
+        embed_duration = time.time() - embed_start
+
+        logger.info(
+            "Embedding generation completed successfully",
+            document_id=doc.id,
+            embedding_time_seconds=round(embed_duration, 3),
+        )
+
+    except QuotaError as e:
+        logger.warning(
+            "Embedding generation failed due to quota exhaustion", document_id=doc.id, error=str(e)
+        )
+        # Raise quota error - will be handled by the calling task
+        if task_context:
+            raise task_context.retry(countdown=1800, exc=e) from e  # Retry in 30 minutes
+        else:
+            raise e
+    except Exception as e:
+        embed_duration = time.time() - embed_start
+        logger.error(
+            "Embedding generation failed",
+            document_id=doc.id,
+            error=str(e),
+            error_type=type(e).__name__,
+            embedding_time_seconds=round(embed_duration, 3),
+        )
+        raise
 
     total_duration = time.time() - start_time
 
@@ -405,7 +467,7 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
             _detect_and_update_language(doc, file_text)
 
             # Process chunks and embeddings
-            _process_chunks_and_embeddings(session, doc, file_text, page_texts)
+            _process_chunks_and_embeddings(session, doc, file_text, page_texts, task_context=self)
 
             # Add processing metrics to context
             context.update(
@@ -505,8 +567,8 @@ def retry_failed_document(self, document_id: str, retry_reason: str = "manual_re
         dict: Processing result
     """
     # Initialize correlation IDs for retry task context
-    set_request_id()
-    set_trace_id()
+    request_id = set_request_id()
+    set_trace_id(request_id)
 
     logger.info(
         "Document retry task started",
@@ -545,7 +607,7 @@ def retry_failed_document(self, document_id: str, retry_reason: str = "manual_re
         _detect_and_update_language(doc, file_text)
 
         # Process chunks and embeddings
-        _process_chunks_and_embeddings(session, doc, file_text, page_texts)
+        _process_chunks_and_embeddings(session, doc, file_text, page_texts, task_context=None)
 
         # Mark document completed
         _mark_status(session, doc, "COMPLETED")

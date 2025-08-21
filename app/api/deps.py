@@ -1,3 +1,4 @@
+import os
 import sys
 from collections.abc import Generator
 
@@ -66,10 +67,14 @@ _SessionLocal: sessionmaker | None = None
 def _get_engine():
     global _engine, _SessionLocal
     if _engine is None:
-        # Build from container-aware settings
+        # Resolve database URL with priority to environment for local/tests
         db_url = (
-            f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@"
-            f"{settings.POSTGRES_SERVER}:5432/{settings.POSTGRES_DB}"
+            os.getenv("DATABASE_URL")
+            or getattr(settings, "DATABASE_URL", None)
+            or (
+                f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@"
+                f"{settings.POSTGRES_SERVER}:5432/{settings.POSTGRES_DB}"
+            )
         )
         _engine = create_engine(db_url)
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)

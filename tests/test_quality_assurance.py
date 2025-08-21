@@ -19,11 +19,14 @@ def test_score_content_quality_basic():
 
 
 def test_validate_embeddings_shape():
+    # Use current embedding dimension from settings
+    dim = settings.EMBEDDING_DIM
+
     # Good single vector
-    good_vec = [0.0] * 1536
+    good_vec = [0.0] * dim
     ok_single = QualityAssurance.validate_embeddings(good_vec)
     # Good batch
-    good_batch = [[0.1] * 1536, [0.2] * 1536]
+    good_batch = [[0.1] * dim, [0.2] * dim]
     ok_batch = QualityAssurance.validate_embeddings(good_batch)
     # Bad dims
     bad_vec = [0.0] * 10

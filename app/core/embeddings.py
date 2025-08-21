@@ -220,7 +220,7 @@ def _get_google_embedding(provider: str, model_name: str) -> Any:
     try:
         # Try to use the newer Google GenAI embedding first
         try:
-            from llama_index.embeddings.google_genai import GoogleGenerativeAIEmbedding
+            from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 
             # Set the API key in environment if not already set
             if settings.GOOGLE_AI_STUDIO_API_KEY and not os.environ.get("GOOGLE_API_KEY"):
@@ -231,7 +231,7 @@ def _get_google_embedding(provider: str, model_name: str) -> Any:
                 model_id = f"models/{model_id}"
 
             # Initialize with the newer GoogleGenerativeAIEmbedding
-            embedding = GoogleGenerativeAIEmbedding(
+            embedding = GoogleGenAIEmbedding(
                 model_name=model_id, api_key=google_api_key, task_type="retrieval_document"
             )
 

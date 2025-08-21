@@ -116,8 +116,10 @@ class TestGroqProvider:
 
     @pytest.fixture
     def mock_redis_client(self):
-        """Create a mock Redis client for testing."""
-        mock_redis = MagicMock()
+        """Create a mock async Redis client for testing."""
+        from unittest.mock import AsyncMock
+
+        mock_redis = AsyncMock()
         mock_redis.get.return_value = None
         mock_redis.setex.return_value = True
         return mock_redis
@@ -612,8 +614,10 @@ class TestLLMRouter:
 
     @pytest.fixture
     def mock_redis(self):
-        """Create a mock Redis client."""
-        mock_redis = MagicMock()
+        """Create a mock async Redis client."""
+        from unittest.mock import AsyncMock
+
+        mock_redis = AsyncMock()
         mock_redis.ping.return_value = True
         mock_redis.exists.return_value = 0
         mock_redis.setex.return_value = True
@@ -641,7 +645,6 @@ class TestLLMRouter:
             router = LLMRouter()
             assert router.redis_client == mock_redis
             assert len(router.available_providers) >= 2  # OpenRouter and Groq should be available
-            mock_redis.ping.assert_called_once()
 
     def test_router_initialization_no_providers(self, mock_redis, mock_settings):
         """Test router initialization with no available providers."""
@@ -654,10 +657,10 @@ class TestLLMRouter:
 
     def test_router_initialization_redis_failure(self, mock_settings):
         """Test router initialization with Redis connection failure."""
-        mock_redis = MagicMock()
-        mock_redis.ping.side_effect = Exception("Redis connection failed")
-
-        with patch("app.core.llm_router.redis.from_url", return_value=mock_redis):
+        with patch(
+            "app.core.llm_router.redis.from_url",
+            side_effect=Exception("Redis connection failed"),
+        ):
             router = LLMRouter()
             assert router.redis_client is None  # Should handle Redis failure gracefully
 

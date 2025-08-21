@@ -2,17 +2,17 @@ import sys
 from collections.abc import Generator
 from pathlib import Path
 
-import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session, sessionmaker
-
-from app.core.config import settings
-from app.db.models import Base
-
 # Ensure repository root is on sys.path before importing app modules (E402 compliant)
 project_root = str(Path(__file__).parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+
+import pytest  # noqa: E402
+from sqlalchemy import create_engine, text  # noqa: E402
+from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
+
+from app.core.config import settings  # noqa: E402
+from app.db.models import Base  # noqa: E402
 
 
 def pytest_configure(config):
@@ -32,13 +32,33 @@ def pytest_configure(config):
 
 @pytest.fixture(scope="session")
 def db_engine():
-    """Create a database engine that is aware of the containerized environment."""
-    # Construct the URL from the container-aware settings, ensuring tests
-    # connect to the 'postgres' service, not 'localhost'.
-    test_db_url = (
-        f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@"
-        f"{settings.POSTGRES_SERVER}:5432/{settings.POSTGRES_DB}"
-    )
+    """Create a database engine that respects test environment configuration."""
+    import os
+    import socket
+
+    # Use DATABASE_URL environment variable if set (for local testing)
+    # Otherwise fall back to container-aware settings
+    test_db_url = os.environ.get("DATABASE_URL") or getattr(settings, "DATABASE_URL", None)
+
+    if not test_db_url:
+        # Construct the URL from the container-aware settings
+        host = settings.POSTGRES_SERVER
+        port = 5432
+
+        # When running locally outside Docker, the service host 'postgres' is not resolvable.
+        # Prefer localhost with the compose-exposed port if 'postgres' does not resolve.
+        if host == "postgres":
+            try:
+                socket.getaddrinfo(host, None)
+            except OSError:
+                host = "localhost"
+                port = 15432
+
+        test_db_url = (
+            f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@{host}:{port}/"
+            f"{settings.POSTGRES_DB}"
+        )
+
     engine = create_engine(test_db_url)
     return engine
 

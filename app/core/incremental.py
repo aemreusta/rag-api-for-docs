@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.dedup import ChunkInput, ContentDeduplicator
-from app.core.embeddings import get_embedding_model
+from app.core.embedding_manager import get_embedding_manager
+from app.core.embedding_storage import get_embedding_storage
 from app.core.ingestion import NLTKAdaptiveChunker
 from app.core.logging_config import get_logger
 from app.core.metadata import ChunkMetadataExtractor, summarize_headers
@@ -277,32 +278,55 @@ class IncrementalProcessor:
         return prepared
 
     def _reembed_pages(self, *, page_texts: Mapping[int, str], source_document: str) -> None:
-        """Chunk and embed provided page texts, storing vectors via PGVectorStore.
+        """Chunk and embed provided page texts, storing vectors via dimension-aware storage.
 
-        Uses the same embedding dimension and provider as configured under settings.
+        Uses embedding manager with provider fallback and dimension-aware table routing.
         """
 
-        # Prepare LlamaIndex components lazily to avoid import cost on import time
-        from llama_index.core import Document as LlamaDocument
         from llama_index.core.node_parser import SentenceSplitter
-        from llama_index.vector_stores.postgres import PGVectorStore
 
-        embedder = get_embedding_model()
-        try:
-            self._logger.info(
-                "embedding_provider_selected",
-                extra={
-                    "provider": type(embedder).__name__,
-                    "model": getattr(embedder, "model_name", getattr(embedder, "model", None)),
-                    "dim": getattr(embedder, "embed_dim", None)
-                    or getattr(embedder, "dimensions", None),
-                },
-            )
-        except Exception:
-            pass
+        embedding_manager = get_embedding_manager()
+        self._log_provider_status(embedding_manager, source_document)
+
         node_parser = SentenceSplitter(chunk_size=512, chunk_overlap=20)
+        llama_docs = self._build_llama_documents(
+            page_texts=page_texts, source_document=source_document
+        )
 
-        # Construct documents per page to preserve page_number metadata
+        if not llama_docs:
+            self._log_no_docs(source_document=source_document, page_texts=page_texts)
+            return
+
+        self._log_chunking_start(source_document=source_document, doc_count=len(llama_docs))
+        nodes = node_parser.get_nodes_from_documents(llama_docs)
+
+        texts, node_refs = self._extract_texts_and_refs(nodes, source_document)
+        if not texts:
+            self._log_no_chunks(source_document=source_document, node_count=len(nodes))
+            return
+
+        embeddings = self._embed_texts(embedding_manager, texts, source_document)
+        for n, e in zip(node_refs, embeddings, strict=True):
+            n.embedding = e
+
+        active_provider = self._select_active_provider(embedding_manager)
+        self._store_embeddings(node_refs, source_document, active_provider)
+
+    def _log_provider_status(self, embedding_manager: Any, source_document: str) -> None:
+        provider_status = embedding_manager.get_provider_status()
+        self._logger.info(
+            "embedding_provider_selected",
+            extra={
+                "provider_status": provider_status,
+                "source_document": source_document,
+            },
+        )
+
+    def _build_llama_documents(
+        self, *, page_texts: Mapping[int, str], source_document: str
+    ) -> list[Any]:
+        from llama_index.core import Document as LlamaDocument
+
         llama_docs: list[LlamaDocument] = []
         for page, text in page_texts.items():
             sanitized = _sanitize_text(text)
@@ -320,26 +344,27 @@ class IncrementalProcessor:
                     },
                 )
             )
+        return llama_docs
 
-        if not llama_docs:
-            self._logger.warning(
-                "No valid documents to embed",
-                source_document=source_document,
-                page_count=len(page_texts),
-            )
-            return
+    def _log_no_docs(self, *, source_document: str, page_texts: Mapping[int, str]) -> None:
+        self._logger.warning(
+            "No valid documents to embed",
+            source_document=source_document,
+            page_count=len(page_texts),
+        )
 
+    def _log_chunking_start(self, *, source_document: str, doc_count: int) -> None:
         self._logger.info(
             "Starting document chunking",
             source_document=source_document,
-            document_count=len(llama_docs),
+            document_count=doc_count,
             chunk_size=512,
             chunk_overlap=20,
         )
 
-        nodes = node_parser.get_nodes_from_documents(llama_docs)
-
-        # Compute embeddings in-batch for performance
+    def _extract_texts_and_refs(
+        self, nodes: list[Any], source_document: str
+    ) -> tuple[list[str], list[Any]]:
         texts: list[str] = []
         node_refs: list[Any] = []
         for n in nodes:
@@ -347,14 +372,19 @@ class IncrementalProcessor:
             if content:
                 texts.append(content)
                 node_refs.append(n)
+        return texts, node_refs
 
-        if not texts:
-            self._logger.warning(
-                "No valid chunks after parsing",
-                source_document=source_document,
-                node_count=len(nodes),
-            )
-            return
+    def _log_no_chunks(self, *, source_document: str, node_count: int) -> None:
+        self._logger.warning(
+            "No valid chunks after parsing",
+            source_document=source_document,
+            node_count=node_count,
+        )
+
+    def _embed_texts(
+        self, embedding_manager: Any, texts: list[str], source_document: str
+    ) -> list[Any]:
+        from time import time
 
         self._logger.info(
             "Starting batch embedding generation",
@@ -364,10 +394,8 @@ class IncrementalProcessor:
             avg_chunk_length=round(sum(len(text) for text in texts) / len(texts), 1),
         )
 
-        from time import time
-
         embed_start = time()
-        embeddings = embedder.get_text_embedding_batch(texts)
+        embeddings = embedding_manager.get_text_embeddings(texts)
         embed_duration = time() - embed_start
 
         self._logger.info(
@@ -379,37 +407,54 @@ class IncrementalProcessor:
             if embed_duration > 0
             else 0,
         )
+        return embeddings
 
-        for n, e in zip(node_refs, embeddings, strict=True):
-            n.embedding = e
+    def _select_active_provider(self, embedding_manager: Any) -> str:
+        provider_status = embedding_manager.get_provider_status()
+        for provider, status in provider_status.items():
+            if status.get("available", False):
+                return provider
+        return "unknown"
 
-        # Add to PGVectorStore directly
-        self._logger.info(
-            "Starting vector store insertion",
-            source_document=source_document,
-            node_count=len(node_refs),
-            table_name="content_embeddings",
-        )
+    def _store_embeddings(
+        self, node_refs: list[Any], source_document: str, active_provider: str
+    ) -> None:
+        from time import time
+
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
 
         store_start = time()
-        vector_store = PGVectorStore.from_params(
-            database=settings.POSTGRES_DB,
-            host=settings.POSTGRES_SERVER,
-            password=settings.POSTGRES_PASSWORD,
-            port=5432,
-            user=settings.POSTGRES_USER,
-            table_name="content_embeddings",
-            embed_dim=settings.EMBEDDING_DIM,
-        )
-        vector_store.add(node_refs)
-        store_duration = time() - store_start
+
+        embeddings_data = []
+        for node in node_refs:
+            page_number = node.metadata.get("page_number", 1)
+            content_text = node.text
+            embedding_vector = node.embedding
+            embeddings_data.append((source_document, page_number, content_text, embedding_vector))
 
         self._logger.info(
-            "Vector store insertion completed",
+            "Starting dimension-aware vector store insertion",
             source_document=source_document,
             node_count=len(node_refs),
+            embedding_dimension=len(embeddings_data[0][3]) if embeddings_data else 0,
+            active_provider=active_provider,
+        )
+
+        engine = create_engine(settings.DATABASE_URL)
+        SessionLocal = sessionmaker(bind=engine)
+        with SessionLocal() as storage_session:
+            embedding_storage = get_embedding_storage(storage_session)
+            stored_count = embedding_storage.store_embeddings(embeddings_data, active_provider)
+
+        store_duration = time() - store_start
+        self._logger.info(
+            "Dimension-aware vector store insertion completed",
+            source_document=source_document,
+            stored_count=stored_count,
             insertion_time_seconds=round(store_duration, 3),
-            table_name="content_embeddings",
+            embedding_dimension=len(embeddings_data[0][3]) if embeddings_data else 0,
+            active_provider=active_provider,
         )
 
 

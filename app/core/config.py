@@ -61,6 +61,20 @@ class Settings(BaseSettings):
     # HuggingFace embedding dimension (384 for all-MiniLM-L6-v2)
     EMBEDDING_DIM: int = 384
 
+    # HuggingFace Embedding Service Settings (Local vLLM Server)
+    EMBEDDING_SERVICE_ENDPOINT: str = ""  # e.g., http://embedding-service:8080
+    EMBEDDING_SERVICE_MODEL_NAME: str = "qwen-qwen3-embedding-0.6b"  # Served model name
+    EMBEDDING_SERVICE_DIMENSIONS: int = 1024  # Default dimension
+    EMBEDDING_SERVICE_TIMEOUT: int = 120
+    EMBEDDING_SERVICE_BATCH_SIZE: int = 32
+
+    # Backward compatibility
+    QWEN_ENDPOINT: str = ""  # Deprecated: use EMBEDDING_SERVICE_ENDPOINT
+    QWEN_MODEL_NAME: str = "Qwen3-Embedding-0.6B"  # Deprecated
+    QWEN_DIMENSIONS: int = 1024  # Deprecated
+    QWEN_TIMEOUT: int = 120  # Deprecated
+    QWEN_BATCH_SIZE: int = 32  # Deprecated
+
     # Metrics & Monitoring Settings
     METRICS_BACKEND: str = "auto"  # auto, prometheus, datadog, opentelemetry, noop
     DATADOG_API_KEY: str = ""  # Optional for DataDog metrics
@@ -68,6 +82,9 @@ class Settings(BaseSettings):
 
     # Redis for Rate Limiting and Caching
     REDIS_URL: str = "redis://:myredissecret@redis:6379/0"
+    REDIS_HOST: str = "redis"
+    REDIS_PORT: int = 6379
+    REDIS_PASSWORD: str = "myredissecret"
     RATE_LIMIT_COUNT: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 86400  # 24 hours
 
