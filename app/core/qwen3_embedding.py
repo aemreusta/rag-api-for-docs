@@ -204,16 +204,16 @@ class Qwen3EmbeddingLocal(BaseEmbedding):
 
         Args:
             model_name: The model name to use
-            device: Device to use for inference ('auto', 'cpu', 'cuda')
+            device: Device to use for inference ('auto', 'cpu', 'cuda', 'mps')
         """
         super().__init__(**kwargs)
         self._model_name = model_name
-        self._device = device
+        self._device = self._resolve_device(device)
         self._logger = get_logger(f"{__name__}.qwen3_local")
         self._tracker = get_request_tracker()
 
         try:
-            self._model = SentenceTransformer(model_name, device=device)
+            self._model = SentenceTransformer(model_name, device=self._device)
             self._logger.info(
                 "Qwen3 local embedding model loaded", model=model_name, device=self._model.device
             )
@@ -222,6 +222,32 @@ class Qwen3EmbeddingLocal(BaseEmbedding):
                 "Failed to load Qwen3 local embedding model", model=model_name, error=str(e)
             )
             raise
+
+    def _resolve_device(self, device: str) -> str:
+        """Resolve device string to actual device, with macOS-specific handling."""
+        import torch
+
+        if device == "auto":
+            # Auto-detect the best available device
+            if torch.cuda.is_available():
+                return "cuda"
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                return "mps"
+            else:
+                return "cpu"
+        elif device == "cuda" and not torch.cuda.is_available():
+            # Fallback to CPU if CUDA is requested but not available
+            self._logger.warning("CUDA requested but not available, falling back to CPU")
+            return "cpu"
+        elif device == "mps" and not (
+            hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+        ):
+            # Fallback to CPU if MPS is requested but not available
+            self._logger.warning("MPS requested but not available, falling back to CPU")
+            return "cpu"
+        else:
+            # Return the requested device as-is
+            return device
 
     def _get_text_embedding(self, text: str) -> list[float]:
         """Get embedding for a single text."""
