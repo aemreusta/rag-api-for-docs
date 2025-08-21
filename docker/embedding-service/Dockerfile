@@ -27,6 +27,9 @@ ENV CUDA_VISIBLE_DEVICES=""
 ENV VLLM_WORKER_MULTIPROC_METHOD="spawn"
 ENV TOKENIZERS_PARALLELISM="false"
 
+# Use dedicated HF cache location, configurable via HF_HOME
+ENV HF_HOME="/cache/huggingface"
+
 # Create app directory
 WORKDIR /app
 
@@ -34,9 +37,11 @@ WORKDIR /app
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-# Create cache directories
-RUN mkdir -p /root/.cache/huggingface && \
-    chmod 777 /root/.cache/huggingface
+# Create non-root user and cache directory
+RUN useradd -m -u 10002 embeduser && \
+    mkdir -p ${HF_HOME} && \
+    chown -R embeduser:embeduser ${HF_HOME} /app
+USER 10002:10002
 
 # Expose port
 EXPOSE 8080
