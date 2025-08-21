@@ -14,6 +14,7 @@ volumes:
   clickhouse_data:
   clickhouse_logs:
   minio_data:
+  embedding_cache:
 
 services:
   # Compose project name prefix for clearer resource names
@@ -327,4 +328,44 @@ services:
     depends_on:
       app: {condition: service_healthy}
       redis: {condition: service_healthy}
+    networks: [app-network]
+
+  # ───────────────────────────── HuggingFace Embedding Service ──────────────────────────────
+  embedding-service:
+    build:
+      context: docker/embedding-service
+      dockerfile: Dockerfile
+    image: chatbot-api-service/embedding-service:latest
+    container_name: embedding-service
+    ports:
+      - "18080:8080"
+    volumes:
+      - embedding_cache:/root/.cache/huggingface
+    environment:
+      - MODEL_NAME=${EMBEDDING_MODEL_NAME:-Qwen/Qwen3-Embedding-0.6B}
+      - MODEL_REVISION=main
+      - HOST=0.0.0.0
+      - PORT=8080
+      - MAX_MODEL_LEN=256
+      - MAX_NUM_SEQS=16
+      - MAX_BATCH_TOKENS=4096
+      - TENSOR_PARALLEL_SIZE=1
+      - GPU_MEMORY_UTILIZATION=0.8
+      - TRUST_REMOTE_CODE=true
+      - CUDA_VISIBLE_DEVICES=""  # CPU-only for minimal resources
+      - TOKENIZERS_PARALLELISM=false
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: "2.0"
+        reservations:
+          memory: 1G
+          cpus: "0.5"
     networks: [app-network]

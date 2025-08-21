@@ -1,202 +1,259 @@
-.PHONY: help build up down logs shell test test-all test-pgvector test-performance test-cov lint format clean rebuild env-generate-secrets env-rotate-secrets env-lockdown env-set-retention logs-all docker-build docker-run docker-scan docker-sbom docker-health hadolint
+# Chatbot API Service - Professional Development Makefile
+# Comprehensive build, test, and deployment automation
 
-help: ## Show this help message
-	@echo 'Usage:'
-	@echo '  make <target>'
-	@echo ''
-	@echo 'Targets:'
-	@awk '/^[a-zA-Z\-\_0-9]+:/ { \
-		helpMessage = match(lastLine, /^## (.*)/); \
-		if (helpMessage) { \
-			helpCommand = substr($$1, 0, index($$1, ":")-1); \
-			helpMessage = substr(lastLine, RSTART + 3, RLENGTH); \
-			printf "  %-20s %s\n", helpCommand, helpMessage; \
-		} \
-	} \
-	{ lastLine = $$0 }' $(MAKEFILE_LIST)
+.DEFAULT_GOAL := help
+.PHONY: help system-check env-check build up down clean rebuild logs shell test migrate deps-update lint format
 
-## Development
-build: ## Build or rebuild services
-	docker compose build
+# Colors for output
+GREEN := \033[32m
+YELLOW := \033[33m  
+RED := \033[31m
+BLUE := \033[34m
+NC := \033[0m # No Color
 
-up: ## Start all services (FastAPI + Demo UI + PostgreSQL + Redis + etc.)
+# Configuration
+DOCKER_BUILDKIT := 1
+COMPOSE_PROJECT_NAME := chatbot-api-service
+COMPOSE_FILE := docker-compose.yml
+DATABASE_URL := postgresql+psycopg2://postgres:postgres@localhost:15432/app
+TEST_DATABASE_URL := postgresql+psycopg2://postgres:postgres@localhost:15432/test_app
+
+# Export environment variables for sub-processes
+export DOCKER_BUILDKIT
+export COMPOSE_PROJECT_NAME
+
+##@ Help
+
+help: ## Display this help message
+	@echo "$(BLUE)Chatbot API Service Development Environment$(NC)"
+	@echo "$(BLUE)=============================================$(NC)"
+	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*?##/ { printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+	@awk '/^##@/ { printf "\n$(YELLOW)%s$(NC)\n", substr($$0, 5) }' $(MAKEFILE_LIST)
+
+##@ System Management
+
+system-check: ## Comprehensive system health check
+	@echo "$(BLUE)🔍 Running System Health Check...$(NC)"
+	@./scripts/system_check.sh
+
+env-check: ## Validate environment configuration
+	@echo "$(BLUE)🔧 Checking Environment Configuration...$(NC)"
+	@if [ ! -f .env ]; then \
+		echo "$(YELLOW)⚠️  .env file not found, copying from .env.example$(NC)"; \
+		cp .env.example .env; \
+		echo "$(GREEN)✅ Created .env file from template$(NC)"; \
+	fi
+	@echo "$(GREEN)✅ Environment file exists$(NC)"
+
+##@ Build & Deploy
+
+build: env-check ## Build all services with BuildKit optimization
+	@echo "$(BLUE)🏗️  Building services with Docker BuildKit...$(NC)"
+	DOCKER_BUILDKIT=1 docker compose build --parallel
+
+rebuild: clean build ## Clean rebuild all services
+
+build-embedding: ## Build only the embedding service
+	@echo "$(BLUE)🧠 Building HuggingFace Embedding Service...$(NC)"
+	DOCKER_BUILDKIT=1 docker compose build embedding-service
+
+##@ Container Management
+
+up: build ## Start all services with health checks
+	@echo "$(BLUE)🚀 Starting all services...$(NC)"
 	docker compose up -d
+	@echo "$(BLUE)⏳ Waiting for services to be healthy...$(NC)"
+	@$(MAKE) wait-for-services
 
-down: ## Stop all services
+down: ## Stop all services gracefully
+	@echo "$(BLUE)⏹️  Stopping all services...$(NC)"
 	docker compose down
 
-logs: ## View output from all containers (core app only)
-	docker compose logs -f app postgres redis
+clean: ## Remove all containers, volumes, and networks
+	@echo "$(BLUE)🧹 Cleaning up Docker resources...$(NC)"
+	docker compose down -v --remove-orphans
+	docker system prune -f
+	@echo "$(GREEN)✅ Cleanup complete$(NC)"
 
-logs-all: ## View output from all containers (app + langfuse + clickhouse + ui)
-	docker compose logs -f app demo-ui langfuse langfuse-worker clickhouse postgres redis minio
+logs: ## View logs from core services
+	docker compose logs -f app postgres redis embedding-service
 
-shell: ## Open a shell in the app container
+logs-all: ## View logs from all services  
+	docker compose logs -f
+
+shell: ## Open shell in app container
 	docker compose exec app /bin/bash
 
-## Testing
-test: ## Run all tests (default test suite)
-	docker compose exec app pytest -v
+##@ Database & Migrations
 
-test-all: ## Run all tests with verbose output and performance metrics
-	docker compose exec app pytest -v -s
+migrate: ## Run database migrations with automatic retry
+	@echo "$(BLUE)🗃️  Running database migrations...$(NC)"
+	@./scripts/run_migrations.sh
 
-test-pgvector: ## Run pgvector performance and configuration tests
-	docker-compose exec app pytest tests/test_pgvector_performance.py tests/test_pgvector_prometheus.py -v -s
-
-test-metrics: ## Run flexible metrics system tests
-	docker-compose exec app pytest tests/test_flexible_metrics.py -v
-
-test-performance: ## Run performance tests with detailed output
-	docker-compose exec app pytest tests/test_pgvector_performance.py::TestPgVectorPerformance::test_vector_search_latency -v -s
-
-test-unit: ## Run unit tests only (fast)
-	docker-compose exec app pytest -m "not integration" -v
-
-test-integration: ## Run integration tests only
-	docker-compose exec app pytest tests/test_chat.py tests/test_pgvector_performance.py -v
-
-test-cov: ## Run tests with coverage report
-	docker-compose exec app pytest --cov=app --cov-report=term-missing --cov-report=html
-
-test-cov-pgvector: ## Run pgvector tests with coverage
-	docker-compose exec app pytest tests/test_pgvector_performance.py tests/test_pgvector_prometheus.py --cov=app.core.query_engine --cov=app.db.models --cov-report=term-missing
-
-## Code Quality
-lint: ## Run linting
-	docker-compose exec app ruff check .
-
-lint-fix: ## Run linting with auto-fix
-	docker-compose exec app ruff check . --fix
-
-format: ## Format code
-	docker-compose exec app ruff format .
-
-type-check: ## Run type checking (if mypy available)
-	docker-compose exec app python -m mypy app/ || echo "mypy not available, skipping type check"
-
-quality-check: ## Run all quality checks (lint + format + type)
-	$(MAKE) lint
-	$(MAKE) format
-	$(MAKE) type-check
-
-## Database
-db-shell: ## Open a database shell
-	docker compose exec postgres psql -U postgres -d app
-
-db-status: ## Show database status and pgvector info
-	@echo "=== Database Status ==="
-	docker compose exec postgres psql -U postgres -d app -c "SELECT version();"
-	@echo "=== pgvector Extension ==="
-	docker compose exec postgres psql -U postgres -d app -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"
-	@echo "=== content_embeddings Table ==="
-	docker compose exec postgres psql -U postgres -d app -c "\d content_embeddings"
-
-migrate: ## Run database migrations
-	docker compose exec app alembic upgrade head
-
-migrate-create: ## Create a new migration
+migrate-create: ## Create new migration (usage: make migrate-create name="your_migration_name")
+	@if [ -z "$(name)" ]; then \
+		echo "$(RED)❌ Please provide migration name: make migrate-create name=\"your_migration_name\"$(NC)"; \
+		exit 1; \
+	fi
 	docker compose exec app alembic revision --autogenerate -m "$(name)"
 
-# ingest: removed (legacy scripts deleted)
+db-shell: ## Open database shell
+	docker compose exec postgres psql -U postgres -d app
 
-## Dependencies
-deps-compile: ## Compile development dependencies (single source of truth)
-	docker compose exec app uv pip compile requirements/requirements-dev.in -o requirements/requirements-dev.txt -c requirements/requirements.in
+db-reset: ## Reset database (WARNING: destroys all data)
+	@echo "$(RED)⚠️  This will destroy all database data!$(NC)"
+	@read -p "Are you sure? (y/N): " confirm; \
+	if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
+		docker compose down postgres; \
+		docker volume rm $(COMPOSE_PROJECT_NAME)_postgres_data 2>/dev/null || true; \
+		docker compose up -d postgres; \
+		sleep 5; \
+		$(MAKE) migrate; \
+	fi
 
-deps-sync: ## Sync development dependencies
-	docker compose exec app uv pip sync --system requirements/requirements-dev.txt
+##@ Testing
 
-## Cleanup
-clean: ## Remove all containers, volumes, and images
-	docker compose down -v --rmi all
+test: ## Run all tests with proper database setup
+	@echo "$(BLUE)🧪 Running test suite...$(NC)"
+	@$(MAKE) test-db-setup
+	PYTHONPATH=. DATABASE_URL=$(TEST_DATABASE_URL) pytest -v
 
-clean-pyc: ## Remove Python file artifacts
-	find . -name '*.pyc' -exec rm -f {} +
-	find . -name '*.pyo' -exec rm -f {} +
-	find . -name '*~' -exec rm -f {} +
-	find . -name '__pycache__' -exec rm -fr {} +
+test-unit: ## Run unit tests only
+	@echo "$(BLUE)🔬 Running unit tests...$(NC)"
+	PYTHONPATH=. pytest -v -m "not integration"
 
-## ClickHouse & Langfuse
-clickhouse-reset: ## Reset ClickHouse volume (fixes auth issues)
-	docker compose down
-	docker volume rm chatbot-api-service_clickhouse_data || true
-	docker compose up -d
+test-integration: ## Run integration tests
+	@echo "$(BLUE)🔗 Running integration tests...$(NC)"
+	@$(MAKE) test-db-setup
+	PYTHONPATH=. DATABASE_URL=$(TEST_DATABASE_URL) pytest -v -m "integration"
 
-clickhouse-test: ## Run ClickHouse smoke tests
-	@echo "Testing ClickHouse authentication..."
-	docker compose exec clickhouse clickhouse-client -u langfuse --password $(CLICKHOUSE_PASSWORD) -q 'SELECT 1'
-	@echo "Testing Langfuse health..."
-	curl -f http://localhost:13000/api/public/health
+test-embeddings: ## Test embedding system specifically
+	@echo "$(BLUE)🧠 Testing embedding system...$(NC)"
+	@$(MAKE) test-db-setup
+	PYTHONPATH=. DATABASE_URL=$(TEST_DATABASE_URL) pytest tests/test_embeddings_config.py tests/test_incremental_processor.py -v
 
-langfuse-logs: ## View Langfuse service logs
-	docker compose logs -f langfuse langfuse-worker clickhouse 
+test-cov: ## Run tests with coverage report
+	@echo "$(BLUE)📊 Running tests with coverage...$(NC)"
+	@$(MAKE) test-db-setup
+	PYTHONPATH=. DATABASE_URL=$(TEST_DATABASE_URL) pytest --cov=app --cov-report=html --cov-report=term-missing
 
-## Build & Deploy
-rebuild: ## Rebuild all Docker images without cache
-	DOCKER_BUILDKIT=1 docker compose build --no-cache
+test-db-setup: ## Setup test database
+	@echo "$(BLUE)🗃️  Setting up test database...$(NC)"
+	@docker compose exec postgres psql -U postgres -c "DROP DATABASE IF EXISTS test_app;" 2>/dev/null || true
+	@docker compose exec postgres psql -U postgres -c "CREATE DATABASE test_app;" 2>/dev/null || true
+	@DATABASE_URL=$(TEST_DATABASE_URL) alembic upgrade head
 
-rebuild-app: ## Rebuild only the app service
-	DOCKER_BUILDKIT=1 docker compose build --no-cache app
+##@ Code Quality
 
-docker-build: ## Build production image with BuildKit/Buildx
-	DOCKER_BUILDKIT=1 docker build -t chatbot-api-service:local .
+lint: ## Run code linting
+	@echo "$(BLUE)🔍 Running linting...$(NC)"
+	ruff check .
 
-docker-run: ## Run the production image locally
-	docker run --rm -p 8000:8000 --env-file .env chatbot-api-service:local
+lint-fix: ## Fix linting issues automatically
+	@echo "$(BLUE)🔧 Fixing linting issues...$(NC)"
+	ruff check . --fix
 
-docker-health: ## Show container health status from compose
-	docker compose ps --format '{{.Name}}\t{{.State}}\t{{.Health}}'
+format: ## Format code
+	@echo "$(BLUE)🎨 Formatting code...$(NC)"
+	ruff format .
 
-hadolint: ## Lint Dockerfile with Hadolint (if installed)
-	hadolint Dockerfile || echo "Hadolint not installed or lint failed"
+type-check: ## Run type checking
+	@echo "$(BLUE)🏷️  Running type checks...$(NC)"
+	mypy app/ || echo "$(YELLOW)⚠️  mypy not available or errors found$(NC)"
 
-docker-scan: ## Scan image for vulnerabilities (requires docker scan or trivy)
-	(docker scan chatbot-api-service:local || true) || (trivy image --exit-code 0 chatbot-api-service:local || true)
+quality: lint format type-check ## Run all code quality checks
 
-docker-sbom: ## Generate SBOM for the image (requires syft)
-	syft packages chatbot-api-service:local -o json > sbom.json || echo "Syft not installed; skipped"
+##@ Dependencies
 
-## Health Checks
-health-check: ## Run comprehensive health checks
-	@echo "=== System Health Check ==="
-	@echo "1. Testing container connectivity..."
-	docker compose exec app python -c "print('✅ App container: OK')"
-	@echo "2. Testing database connectivity..."
-	docker compose exec postgres psql -U postgres -d app -c "SELECT '✅ Database: OK';"
-	@echo "3. Testing Redis connectivity..."
-	docker compose exec redis redis-cli ping || echo "⚠️  Redis auth required (normal for secured setup)"
-	@echo "4. Testing pgvector functionality..."
-	$(MAKE) test-pgvector
-	@echo "5. Testing vector search performance..."
-	@echo "=== Vector Search Performance Benchmark ==="
-	docker compose exec app pytest tests/test_pgvector_performance.py::TestPgVectorPerformance::test_vector_search_latency -v -s
-	@echo "=== Health Check Complete ==="
+deps-update: ## Update and sync dependencies
+	@echo "$(BLUE)📦 Updating dependencies...$(NC)"
+	uv pip compile requirements/requirements.in -o requirements/requirements.txt
+	uv pip compile requirements/requirements-dev.in -o requirements/requirements-dev.txt
+	docker compose exec app uv pip sync requirements/requirements-dev.txt
 
-## Cache Management
-cache-clear: ## Clear Redis cache
-	docker compose exec redis redis-cli -a $(shell grep REDIS_AUTH .env | cut -d= -f2) FLUSHDB || echo "Redis connection failed, cache may be using in-memory fallback"
+deps-lock: ## Lock current dependencies
+	@echo "$(BLUE)🔒 Locking dependencies...$(NC)"
+	uv pip freeze > requirements/requirements-lock.txt
 
-cache-stats: ## Show cache statistics
-	@echo "=== Cache Statistics ==="
-	docker compose exec app python -c "import asyncio; from app.core.cache import get_cache_stats; print('Cache Stats:', asyncio.run(get_cache_stats()))"
+##@ Embedding Service
 
-cache-test: ## Test cache functionality
-	docker compose exec app python -c "import asyncio; from app.core.cache import get_cache_backend; backend = asyncio.run(get_cache_backend()); print('Cache backend:', type(backend).__name__)"
+embedding-test: ## Test embedding service specifically
+	@echo "$(BLUE)🧠 Testing embedding service...$(NC)"
+	python scripts/manage_embedding_providers.py health
 
-## CI/CD Simulation
-ci-test: ## Run tests as they would run in CI
-	$(MAKE) lint
-	$(MAKE) test-all
-	$(MAKE) test-cov
+embedding-models: ## List available embedding models
+	@echo "$(BLUE)📋 Available HuggingFace Embedding Models:$(NC)"
+	@echo "Default: Qwen/Qwen3-Embedding-0.6B (1024 dims)"
+	@echo "Alternatives:"
+	@echo "  - sentence-transformers/all-MiniLM-L6-v2 (384 dims)"
+	@echo "  - BAAI/bge-small-en-v1.5 (384 dims)"
+	@echo "  - intfloat/e5-small-v2 (384 dims)"
+	@echo "To change: Set EMBEDDING_MODEL_NAME in .env"
 
-## Env Management
-env-generate-secrets: ## Generate required secrets into .env if missing
-	./scripts/manage_env.sh generate-secrets
+embedding-change-model: ## Change embedding model (usage: make embedding-change-model model="model/name")
+	@if [ -z "$(model)" ]; then \
+		echo "$(RED)❌ Please provide model name: make embedding-change-model model=\"Qwen/Qwen3-Embedding-0.6B\"$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)🔄 Changing embedding model to $(model)...$(NC)"
+	@sed -i '' 's/EMBEDDING_MODEL_NAME=.*/EMBEDDING_MODEL_NAME=$(model)/' .env || \
+	 sed -i 's/EMBEDDING_MODEL_NAME=.*/EMBEDDING_MODEL_NAME=$(model)/' .env
+	docker compose restart embedding-service
 
-env-rotate-secrets: ## Force rotate NEXTAUTH_SECRET, SALT, ENCRYPTION_KEY, CLICKHOUSE_PASSWORD
-	./scripts/manage_env.sh generate-secrets --rotate
+##@ Monitoring
 
-env-lockdown: ## Disable public signup and set default retention to 90d
-	./scripts/manage_env.sh lockdown-signup
-	./scripts/manage_env.sh set-retention 90
+health-check: ## Comprehensive health check
+	@echo "$(BLUE)🏥 Running comprehensive health check...$(NC)"
+	@./scripts/health_check.sh
+
+logs-errors: ## Show only error logs
+	docker compose logs --since=1h | grep -i error || echo "$(GREEN)✅ No errors found in recent logs$(NC)"
+
+stats: ## Show system statistics
+	@echo "$(BLUE)📊 System Statistics:$(NC)"
+	@echo "Containers: $(shell docker compose ps --format table | wc -l)"
+	@echo "Images: $(shell docker images | wc -l)"
+	@echo "Volumes: $(shell docker volume ls | wc -l)"
+	@echo "Networks: $(shell docker network ls | wc -l)"
+
+##@ Utilities
+
+wait-for-services: ## Wait for services to be healthy
+	@echo "$(BLUE)⏳ Waiting for services...$(NC)"
+	@timeout=60; \
+	while [ $$timeout -gt 0 ]; do \
+		if docker compose exec postgres pg_isready -U postgres >/dev/null 2>&1; then \
+			echo "$(GREEN)✅ PostgreSQL ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for PostgreSQL... ($$timeout)"; \
+		sleep 1; \
+		timeout=$$((timeout-1)); \
+	done
+	@timeout=60; \
+	while [ $$timeout -gt 0 ]; do \
+		if docker compose exec redis redis-cli ping >/dev/null 2>&1; then \
+			echo "$(GREEN)✅ Redis ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for Redis... ($$timeout)"; \
+		sleep 1; \
+		timeout=$$((timeout-1)); \
+	done
+
+backup: ## Backup database and volumes
+	@echo "$(BLUE)💾 Creating backup...$(NC)"
+	@mkdir -p backups
+	docker compose exec postgres pg_dump -U postgres app > backups/db_backup_$(shell date +%Y%m%d_%H%M%S).sql
+	@echo "$(GREEN)✅ Database backup created$(NC)"
+
+full-reset: ## Complete system reset (WARNING: destroys all data)
+	@echo "$(RED)⚠️  This will destroy ALL data and rebuild everything!$(NC)"
+	@read -p "Are you sure? Type 'yes' to continue: " confirm; \
+	if [ "$$confirm" = "yes" ]; then \
+		$(MAKE) clean; \
+		$(MAKE) build; \
+		$(MAKE) up; \
+		$(MAKE) migrate; \
+		$(MAKE) test; \
+	fi
