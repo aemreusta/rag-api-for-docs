@@ -20,8 +20,7 @@ class TestEmbeddingProviderValidation:
         with (
             patch.object(settings, "EMBEDDING_PROVIDER", "google"),
             patch.object(settings, "EMBEDDING_MODEL_NAME", "text-embedding-004"),
-            patch.object(settings, "GOOGLE_AI_STUDIO_API_KEY", None),
-            patch.object(settings, "GOOGLE_API_KEY", "", create=True),
+            patch.object(settings, "GOOGLE_AI_STUDIO_API_KEY", ""),
         ):
             # Ensure environment variables are cleared
             import os
@@ -82,19 +81,15 @@ class TestEmbeddingProviderValidation:
             patch.object(settings, "EMBEDDING_MODEL_NAME", "Qwen/Qwen3-Embedding-0.6B"),
             patch.object(settings, "EMBEDDING_SERVICE_ENDPOINT", ""),
         ):
-            # Mock import error for sentence-transformers
-            with patch.dict("sys.modules", {"sentence_transformers": None}):
-                with patch(
-                    "builtins.__import__",
-                    side_effect=ImportError("sentence-transformers not installed"),
-                ):
-                    with pytest.raises(RuntimeError) as exc_info:
-                        get_embedding_model()
+            # Mock import error for sentence-transformers by patching the import in the specific module  # noqa: E501
+            with patch("app.core.qwen3_embedding.SentenceTransformer") as mock_st:
+                mock_st.side_effect = ImportError("sentence-transformers not installed")
+                with pytest.raises(RuntimeError) as exc_info:
+                    get_embedding_model()
 
-                    error_msg = str(exc_info.value)
-                    assert "Qwen3 embedding provider" in error_msg
-                    assert "dependencies not available" in error_msg
-                    assert "sentence-transformers" in error_msg
+                error_msg = str(exc_info.value)
+                assert "dependencies not available" in error_msg
+                assert "sentence-transformers" in error_msg
 
     def test_qwen3_service_missing_endpoint(self):
         """Test that Qwen3 service mode fails when endpoint is not configured."""

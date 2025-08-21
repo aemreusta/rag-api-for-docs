@@ -54,7 +54,7 @@ class Qwen3Embedding(BaseEmbedding):
         # Initialize HTTP client
         self._client = httpx.AsyncClient(
             timeout=httpx.Timeout(self._timeout),
-            limits=httpx.Limits(max_keepalive=20, max_connections=100),
+            limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
         )
 
         # Test connection
