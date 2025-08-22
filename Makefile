@@ -2,7 +2,7 @@
 # Comprehensive build, test, and deployment automation
 
 .DEFAULT_GOAL := help
-.PHONY: help system-check env-check build up down clean rebuild logs shell test migrate deps-update lint format
+.PHONY: help system-check env-check build up down clean rebuild logs shell test migrate deps deps-update lint format
 
 # Colors for output
 GREEN := \033[32m
@@ -15,6 +15,7 @@ NC := \033[0m # No Color
 DOCKER_BUILDKIT := 1
 COMPOSE_PROJECT_NAME := chatbot-api-service
 COMPOSE_FILE := docker-compose.yml
+REQUIREMENTS_DIR := requirements
 DATABASE_URL := postgresql+psycopg2://postgres:postgres@localhost:15432/app
 TEST_DATABASE_URL := postgresql+psycopg2://postgres:postgres@localhost:15432/test_app
 
@@ -164,6 +165,17 @@ type-check: ## Run type checking
 quality: lint format type-check ## Run all code quality checks
 
 ##@ Dependencies
+
+deps: ## 📦 Compile all locked requirements files from the .in files.
+	@echo "--- Compiling backend requirements ---"
+	uv pip compile --upgrade $(REQUIREMENTS_DIR)/requirements-core.in -o $(REQUIREMENTS_DIR)/requirements-core.txt
+	@echo "--- Compiling development requirements ---"
+	uv pip compile --upgrade $(REQUIREMENTS_DIR)/requirements-dev.in -o $(REQUIREMENTS_DIR)/requirements-dev.txt
+	@echo "--- Compiling AI/ML requirements ---"
+	uv pip compile --upgrade $(REQUIREMENTS_DIR)/requirements-ml.in -o $(REQUIREMENTS_DIR)/requirements-ml.txt
+	@echo "--- Compiling common requirements ---"
+	uv pip compile --upgrade $(REQUIREMENTS_DIR)/requirements.in -o $(REQUIREMENTS_DIR)/requirements.txt
+	@echo "✅ All requirements compiled."
 
 deps-update: ## Update and sync dependencies
 	@echo "$(BLUE)📦 Updating dependencies...$(NC)"
