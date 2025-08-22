@@ -76,7 +76,10 @@ async def _detect_language_from_filename(filename: str) -> str:
 
 
 async def _get_or_store_file(payload: bytes, safe_name: str, content_hash: str) -> str:
-    """Get storage URI from cache or store file and cache the URI."""
+    """Get storage URI from cache or store file and cache the URI.
+
+    Uses content-addressed storage to prevent duplicate file storage.
+    """
     try:
         cache = await get_cache_backend()
         cache_key = f"doc_hash:{content_hash}"
@@ -84,10 +87,12 @@ async def _get_or_store_file(payload: bytes, safe_name: str, content_hash: str) 
         if isinstance(cached_uri, str) and cached_uri:
             return cached_uri
 
-        storage_uri = storage.store_file(payload, safe_name)
+        # Use content-addressed storage with content_hash
+        storage_uri = storage.store_file(payload, safe_name, content_hash)
         await cache.set(cache_key, storage_uri, ttl=600)
         return storage_uri
     except Exception:
+        # Fallback without content_hash for backward compatibility
         return storage.store_file(payload, safe_name)
 
 
