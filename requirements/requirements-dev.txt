@@ -2,15 +2,15 @@
 #    uv pip compile requirements/requirements-dev.in -o requirements/requirements-dev.txt
 aiohappyeyeballs==2.6.1
     # via aiohttp
-aiohttp==3.12.13
+aiohttp==3.12.15
     # via
     #   huggingface-hub
     #   llama-index-core
-aiosignal==1.3.2
+aiosignal==1.4.0
     # via aiohttp
 aiosqlite==0.21.0
     # via llama-index-core
-alembic==1.16.2
+alembic==1.16.4
     # via -r requirements/requirements-core.in
 altair==5.5.0
     # via streamlit
@@ -18,7 +18,7 @@ amqp==5.3.1
     # via kombu
 annotated-types==0.7.0
     # via pydantic
-anyio==4.9.0
+anyio==4.10.0
     # via
     #   google-genai
     #   groq
@@ -43,7 +43,7 @@ backoff==2.2.1
     # via langfuse
 bandit==1.8.6
     # via -r requirements/requirements-dev.in
-banks==2.1.3
+banks==2.2.0
     # via llama-index-core
 beautifulsoup4==4.13.4
     # via
@@ -59,7 +59,7 @@ cachetools==5.5.2
     #   streamlit
 celery==5.5.3
     # via -r requirements/requirements-dev.in
-certifi==2025.6.15
+certifi==2025.8.3
     # via
     #   httpcore
     #   httpx
@@ -67,7 +67,7 @@ certifi==2025.6.15
     #   requests
 cfgv==3.4.0
     # via pre-commit
-charset-normalizer==3.4.2
+charset-normalizer==3.4.3
     # via
     #   commitizen
     #   requests
@@ -95,7 +95,7 @@ colorama==0.4.6
     #   griffe
 commitizen==4.8.3
     # via -r requirements/requirements-dev.in
-coverage==7.9.1
+coverage==7.10.4
     # via pytest-cov
 dataclasses-json==0.6.7
     # via llama-index-core
@@ -103,14 +103,17 @@ decli==0.6.3
     # via commitizen
 decorator==5.2.1
     # via ipython
+defusedxml==0.7.1
+    # via llama-index-readers-file
 deprecated==1.2.18
     # via
     #   banks
     #   llama-index-core
+    #   llama-index-indices-managed-llama-cloud
     #   llama-index-instrumentation
 dirtyjson==1.0.8
     # via llama-index-core
-distlib==0.3.9
+distlib==0.4.0
     # via virtualenv
 distro==1.9.0
     # via
@@ -118,11 +121,11 @@ distro==1.9.0
     #   openai
 executing==2.2.0
     # via stack-data
-fakeredis==2.30.1
+fakeredis==2.31.0
     # via -r requirements/requirements-dev.in
-fastapi==0.115.14
+fastapi==0.116.1
     # via -r requirements/requirements-core.in
-filelock==3.18.0
+filelock==3.19.1
     # via
     #   huggingface-hub
     #   torch
@@ -134,32 +137,32 @@ frozenlist==1.7.0
     # via
     #   aiohttp
     #   aiosignal
-fsspec==2025.5.1
+fsspec==2025.7.0
     # via
     #   huggingface-hub
     #   llama-index-core
     #   torch
 gitdb==4.0.12
     # via gitpython
-gitpython==3.1.44
+gitpython==3.1.45
     # via streamlit
 google-auth==2.40.3
     # via google-genai
-google-genai==1.29.0
+google-genai==1.31.0
     # via
     #   llama-index-embeddings-google-genai
     #   llama-index-llms-google-genai
-greenlet==3.2.3
+greenlet==3.2.4
     # via sqlalchemy
-griffe==1.7.3
+griffe==1.12.1
     # via banks
-groq==0.29.0
+groq==0.31.0
     # via -r requirements/requirements-ml.in
 h11==0.16.0
     # via
     #   httpcore
     #   uvicorn
-hf-xet==1.1.5
+hf-xet==1.1.8
     # via huggingface-hub
 html2text==2025.4.15
     # via -r requirements/requirements-ml.in
@@ -174,13 +177,13 @@ httpx==0.28.1
     #   llama-index-core
     #   openai
     #   pytest-httpx
-huggingface-hub==0.33.1
+huggingface-hub==0.34.4
     # via
     #   llama-index-embeddings-huggingface
     #   sentence-transformers
     #   tokenizers
     #   transformers
-identify==2.6.12
+identify==2.6.13
     # via pre-commit
 idna==3.10
     # via
@@ -193,7 +196,7 @@ importlib-metadata==8.7.0
     # via commitizen
 iniconfig==2.1.0
     # via pytest
-ipython==9.3.0
+ipython==9.4.0
     # via
     #   -r requirements/requirements-dev.in
     #   nbqa
@@ -214,37 +217,32 @@ joblib==1.5.1
     # via
     #   nltk
     #   scikit-learn
-jsonschema==4.24.0
+jsonschema==4.25.1
     # via altair
 jsonschema-specifications==2025.4.1
     # via jsonschema
 kombu==5.5.4
     # via celery
-langfuse==2.60.8
+langfuse==2.60.9
     # via
     #   -r requirements/requirements-core.in
     #   llama-index-callbacks-langfuse
-llama-cloud==0.1.26
+llama-cloud==0.1.35
     # via
     #   llama-cloud-services
     #   llama-index-indices-managed-llama-cloud
-llama-cloud-services==0.6.34
+llama-cloud-services==0.6.54
     # via llama-parse
-llama-index==0.12.44
+llama-index==0.13.2
     # via -r requirements/requirements-ml.in
-llama-index-agent-openai==0.4.11
-    # via
-    #   llama-index
-    #   llama-index-program-openai
-llama-index-callbacks-langfuse==0.3.0
+llama-index-callbacks-langfuse==0.4.0
     # via -r requirements/requirements-ml.in
-llama-index-cli==0.4.3
+llama-index-cli==0.5.0
     # via llama-index
-llama-index-core==0.12.44
+llama-index-core==0.13.2
     # via
     #   llama-cloud-services
     #   llama-index
-    #   llama-index-agent-openai
     #   llama-index-callbacks-langfuse
     #   llama-index-cli
     #   llama-index-embeddings-google-genai
@@ -255,61 +253,46 @@ llama-index-core==0.12.44
     #   llama-index-llms-openai
     #   llama-index-llms-openai-like
     #   llama-index-llms-openrouter
-    #   llama-index-multi-modal-llms-openai
-    #   llama-index-program-openai
-    #   llama-index-question-gen-openai
     #   llama-index-readers-file
     #   llama-index-readers-llama-parse
     #   llama-index-vector-stores-postgres
-llama-index-embeddings-google-genai==0.2.1
+llama-index-embeddings-google-genai==0.3.0
     # via -r requirements/requirements-ml.in
-llama-index-embeddings-huggingface==0.5.5
+llama-index-embeddings-huggingface==0.6.0
     # via -r requirements/requirements-ml.in
-llama-index-embeddings-openai==0.3.1
+llama-index-embeddings-openai==0.5.0
     # via
     #   llama-index
     #   llama-index-cli
-llama-index-indices-managed-llama-cloud==0.7.7
+llama-index-indices-managed-llama-cloud==0.9.2
     # via llama-index
-llama-index-instrumentation==0.2.0
+llama-index-instrumentation==0.4.0
     # via llama-index-workflows
-llama-index-llms-google-genai==0.2.6
+llama-index-llms-google-genai==0.3.0
     # via -r requirements/requirements-ml.in
-llama-index-llms-openai==0.4.7
+llama-index-llms-openai==0.5.4
     # via
     #   -r requirements/requirements-ml.in
     #   llama-index
-    #   llama-index-agent-openai
     #   llama-index-cli
     #   llama-index-llms-openai-like
-    #   llama-index-multi-modal-llms-openai
-    #   llama-index-program-openai
-    #   llama-index-question-gen-openai
-llama-index-llms-openai-like==0.4.0
+llama-index-llms-openai-like==0.5.0
     # via llama-index-llms-openrouter
-llama-index-llms-openrouter==0.3.2
+llama-index-llms-openrouter==0.4.0
     # via -r requirements/requirements-ml.in
-llama-index-multi-modal-llms-openai==0.5.1
-    # via llama-index
-llama-index-program-openai==0.3.2
-    # via
-    #   llama-index
-    #   llama-index-question-gen-openai
-llama-index-question-gen-openai==0.3.1
-    # via llama-index
-llama-index-readers-file==0.4.9
+llama-index-readers-file==0.5.2
     # via
     #   -r requirements/requirements-ml.in
     #   llama-index
-llama-index-readers-llama-parse==0.4.0
+llama-index-readers-llama-parse==0.5.0
     # via
     #   -r requirements/requirements-ml.in
     #   llama-index
-llama-index-vector-stores-postgres==0.5.4
+llama-index-vector-stores-postgres==0.6.3
     # via -r requirements/requirements-ml.in
-llama-index-workflows==1.0.1
+llama-index-workflows==1.3.0
     # via llama-index-core
-llama-parse==0.6.34
+llama-parse==0.6.54
     # via llama-index-readers-llama-parse
 mako==1.3.10
     # via alembic
@@ -327,13 +310,13 @@ mdurl==0.1.2
     # via markdown-it-py
 mpmath==1.3.0
     # via sympy
-multidict==6.6.0
+multidict==6.6.4
     # via
     #   aiohttp
     #   yarl
 mypy-extensions==1.1.0
     # via typing-inspect
-narwhals==1.46.0
+narwhals==2.1.2
     # via altair
 nbqa==1.9.1
     # via -r requirements/requirements-dev.in
@@ -350,7 +333,7 @@ nltk==3.9.1
     #   llama-index-core
 nodeenv==1.9.1
     # via pre-commit
-numpy==2.3.1
+numpy==2.3.2
     # via
     #   llama-index-core
     #   pandas
@@ -360,10 +343,9 @@ numpy==2.3.1
     #   scipy
     #   streamlit
     #   transformers
-openai==1.92.3
+openai==1.101.0
     # via
     #   -r requirements/requirements-ml.in
-    #   llama-index-agent-openai
     #   llama-index-embeddings-openai
     #   llama-index-llms-openai
 packaging==24.2
@@ -385,7 +367,7 @@ parso==0.8.4
     # via jedi
 pathspec==0.12.1
     # via yamllint
-pbr==6.1.1
+pbr==7.0.1
     # via stevedore
 pexpect==4.9.0
     # via ipython
@@ -393,7 +375,7 @@ pgvector==0.4.1
     # via
     #   -r requirements/requirements-core.in
     #   llama-index-vector-stores-postgres
-pillow==10.4.0
+pillow==11.3.0
     # via
     #   llama-index-core
     #   llama-index-llms-google-genai
@@ -403,12 +385,13 @@ platformdirs==4.3.8
     # via
     #   banks
     #   llama-cloud-services
+    #   llama-index-core
     #   virtualenv
 pluggy==1.6.0
     # via
     #   pytest
     #   pytest-cov
-pre-commit==4.2.0
+pre-commit==4.3.0
     # via -r requirements/requirements-dev.in
 prometheus-client==0.22.1
     # via -r requirements/requirements-core.in
@@ -421,7 +404,7 @@ propcache==0.3.2
     # via
     #   aiohttp
     #   yarl
-protobuf==4.25.8
+protobuf==6.32.0
     # via streamlit
 psycopg2-binary==2.9.10
     # via
@@ -431,7 +414,7 @@ ptyprocess==0.7.0
     # via pexpect
 pure-eval==0.2.3
     # via stack-data
-pyarrow==20.0.0
+pyarrow==21.0.0
     # via streamlit
 pyasn1==0.6.1
     # via
@@ -468,7 +451,7 @@ pygments==2.19.2
     #   ipython-pygments-lexers
     #   pytest
     #   rich
-pypdf==5.6.1
+pypdf==6.0.0
     # via
     #   -r requirements/requirements-dev.in
     #   llama-index-readers-file
@@ -478,7 +461,7 @@ pytest==8.4.1
     #   pytest-asyncio
     #   pytest-cov
     #   pytest-httpx
-pytest-asyncio==1.0.0
+pytest-asyncio==1.1.0
     # via -r requirements/requirements-dev.in
 pytest-cov==6.2.1
     # via -r requirements/requirements-dev.in
@@ -492,6 +475,8 @@ python-dotenv==1.1.1
     # via
     #   llama-cloud-services
     #   pydantic-settings
+python-magic==0.4.27
+    # via -r requirements/requirements-core.in
 python-multipart==0.0.20
     # via -r requirements/requirements-core.in
 pytz==2025.2
@@ -509,7 +494,7 @@ pyyaml==6.0.2
     #   yamllint
 questionary==2.1.0
     # via commitizen
-redis==6.2.0
+redis==6.4.0
     # via
     #   -r requirements/requirements-core.in
     #   fakeredis
@@ -517,12 +502,12 @@ referencing==0.36.2
     # via
     #   jsonschema
     #   jsonschema-specifications
-regex==2024.11.6
+regex==2025.7.34
     # via
     #   nltk
     #   tiktoken
     #   transformers
-requests==2.32.4
+requests==2.32.5
     # via
     #   google-genai
     #   huggingface-hub
@@ -533,23 +518,23 @@ requests==2.32.4
     #   transformers
 rich==14.1.0
     # via bandit
-rpds-py==0.26.0
+rpds-py==0.27.0
     # via
     #   jsonschema
     #   referencing
 rsa==4.9.1
     # via google-auth
-ruff==0.12.1
+ruff==0.12.10
     # via -r requirements/requirements-dev.in
-safetensors==0.5.3
+safetensors==0.6.2
     # via transformers
-scikit-learn==1.7.0
+scikit-learn==1.7.1
     # via sentence-transformers
-scipy==1.16.0
+scipy==1.16.1
     # via
     #   scikit-learn
     #   sentence-transformers
-sentence-transformers==4.1.0
+sentence-transformers==5.1.0
     # via llama-index-embeddings-huggingface
 setuptools==80.9.0
     # via
@@ -568,18 +553,18 @@ sortedcontainers==2.4.0
     # via fakeredis
 soupsieve==2.7
     # via beautifulsoup4
-sqlalchemy==2.0.41
+sqlalchemy==2.0.43
     # via
     #   alembic
     #   llama-index-core
     #   llama-index-vector-stores-postgres
 stack-data==0.6.3
     # via ipython
-starlette==0.46.2
+starlette==0.47.2
     # via fastapi
 stevedore==5.4.1
     # via bandit
-streamlit==1.46.1
+streamlit==1.48.1
     # via
     #   -r requirements/requirements-dev.in
     #   streamlit-chat
@@ -594,19 +579,20 @@ sympy==1.14.0
 tenacity==9.1.2
     # via
     #   google-genai
+    #   llama-cloud-services
     #   llama-index-core
     #   streamlit
 termcolor==3.1.0
     # via commitizen
 threadpoolctl==3.6.0
     # via scikit-learn
-tiktoken==0.9.0
+tiktoken==0.11.0
     # via llama-index-core
 tokenize-rt==6.2.0
     # via
     #   nbqa
     #   pyupgrade
-tokenizers==0.21.2
+tokenizers==0.21.4
     # via transformers
 toml==0.10.2
     # via streamlit
@@ -614,9 +600,9 @@ tomli==2.2.1
     # via nbqa
 tomlkit==0.13.3
     # via commitizen
-torch==2.7.1
+torch==2.8.0
     # via sentence-transformers
-tornado==6.5.1
+tornado==6.5.2
     # via streamlit
 tqdm==4.67.1
     # via
@@ -630,12 +616,13 @@ traitlets==5.14.3
     # via
     #   ipython
     #   matplotlib-inline
-transformers==4.53.0
+transformers==4.55.3
     # via
     #   llama-index-llms-openai-like
     #   sentence-transformers
-typing-extensions==4.14.0
+typing-extensions==4.14.1
     # via
+    #   aiosignal
     #   aiosqlite
     #   alembic
     #   altair
@@ -647,12 +634,14 @@ typing-extensions==4.14.0
     #   huggingface-hub
     #   ipython
     #   llama-index-core
+    #   llama-index-workflows
     #   openai
     #   pydantic
     #   pydantic-core
     #   referencing
     #   sentence-transformers
     #   sqlalchemy
+    #   starlette
     #   streamlit
     #   torch
     #   typing-inspect
@@ -671,22 +660,22 @@ tzdata==2025.2
     #   pandas
 urllib3==2.5.0
     # via requests
-uv==0.7.20
+uv==0.8.13
     # via -r requirements/requirements-core.in
-uvicorn==0.34.3
+uvicorn==0.35.0
     # via -r requirements/requirements-core.in
 vine==5.1.0
     # via
     #   amqp
     #   celery
     #   kombu
-virtualenv==20.31.2
+virtualenv==20.34.0
     # via pre-commit
 wcwidth==0.2.13
     # via prompt-toolkit
 websockets==15.0.1
     # via google-genai
-wrapt==1.17.2
+wrapt==1.17.3
     # via
     #   deprecated
     #   langfuse

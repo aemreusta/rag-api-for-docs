@@ -8,6 +8,9 @@ fastapi
 uvicorn
 python-multipart
 
+# File Processing & Validation
+python-magic
+
 # Database & Persistence
 psycopg2-binary
 pgvector
