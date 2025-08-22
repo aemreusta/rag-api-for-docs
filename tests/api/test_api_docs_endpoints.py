@@ -27,10 +27,15 @@ class TestDocumentUploadEndpoint:
             )
 
             with patch("app.api.v1.docs._enqueue_processing_job") as mock_enqueue:
+                # Mock the enqueue function to return a job_id
+                mock_enqueue.return_value = "test-job-123"
+
                 response = client.post("/api/v1/docs/upload", files=files)
 
                 assert response.status_code == 201
-                assert response.json()["filename"] == "test.pdf"
+                response_data = response.json()
+                assert response_data["filename"] == "test.pdf"
+                assert response_data["job_id"] == "test-job-123"
                 mock_enqueue.assert_called_once()
 
     def test_upload_document_missing_file(self):
@@ -106,7 +111,8 @@ class TestDocumentUploadEndpoint:
                 validation_details=validation_details,
             )
 
-            with patch("app.api.v1.docs._enqueue_processing_job"):
+            with patch("app.api.v1.docs._enqueue_processing_job") as mock_enqueue:
+                mock_enqueue.return_value = "test-job-456"
                 response = client.post("/api/v1/docs/upload", files=files)
                 assert response.status_code == 201
 

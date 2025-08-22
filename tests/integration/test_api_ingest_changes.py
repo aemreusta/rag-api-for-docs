@@ -39,7 +39,7 @@ def test_jobs_status_shape():
         r = client.get(f"/api/v1/docs/jobs/{job_id}")
     assert r.status_code == 200
     body = r.json()
-    assert set(body.keys()) == {"id", "status", "detail"}
+    assert set(body.keys()) == {"id", "status", "progress_percent", "detail"}
 
 
 def test_apply_changes_with_existing_document(db_session):

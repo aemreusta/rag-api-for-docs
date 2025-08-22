@@ -30,7 +30,7 @@ from app.core.logging_config import get_logger, set_request_id, set_trace_id, se
 from app.core.metadata import ChunkMetadataExtractor
 from app.core.request_tracking import get_request_tracker
 from app.core.storage import get_storage_backend
-from app.db.models import Document
+from app.db.models import Document, ProcessingJob
 
 # Ensure logging is configured for workers
 setup_logging()
@@ -51,6 +51,53 @@ def _create_session():
     )
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=create_engine(db_url))
     return SessionLocal()
+
+
+def _update_job_progress(
+    session,
+    job_id: str,
+    progress_percent: int,
+    status: str = None,
+    result_data: dict = None,
+    error_message: str = None,
+) -> None:
+    """Update job progress in the database."""
+    try:
+        from datetime import datetime, timezone
+
+        job = session.get(ProcessingJob, job_id)
+        if job:
+            job.progress_percent = progress_percent
+
+            if status:
+                job.status = status
+
+            if result_data:
+                job.result_data = result_data
+
+            if error_message:
+                job.error_message = error_message
+
+            if status in ("completed", "failed"):
+                if status == "completed":
+                    job.completed_at = datetime.now(timezone.utc)
+                else:
+                    job.error_message = error_message
+
+            session.commit()
+
+            logger.info(
+                "Job progress updated",
+                job_id=job_id,
+                progress_percent=progress_percent,
+                status=status,
+            )
+    except Exception as e:
+        logger.warning(
+            "Failed to update job progress",
+            job_id=job_id,
+            error=str(e),
+        )
 
 
 def _init_task_context_from_job(document_data: dict, job_id: str) -> tuple[str | None, str, str]:
@@ -444,6 +491,9 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
     # DB session (worker-safe)
     session = _create_session()
     try:
+        # Mark job as started
+        _update_job_progress(session, job_id, 5, "processing", {"stage": "initializing"})
+
         doc_id = document_data.get("document_id")
         storage_uri = document_data.get("storage_uri")
         # In minimal/eager test mode, allow empty payload and just report queued
@@ -451,6 +501,7 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
             return {"job_id": job_id, "status": "queued"}
         doc = session.get(Document, doc_id)
         if not doc:
+            _update_job_progress(session, job_id, 0, "failed", None, "document_not_found")
             return {"job_id": job_id, "status": "failed", "error": "document_not_found"}
 
         # Wrap main processing with comprehensive tracking
@@ -458,6 +509,7 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
             document_id=doc.id, stage="full_processing", filename=doc.filename
         ) as context:
             # Fetch file contents and extract text with metadata
+            _update_job_progress(session, job_id, 25, "processing", {"stage": "extracting_content"})
             file_text, page_texts, metadata = _safe_retrieve_and_extract(doc, storage_uri)
 
             # Update document metadata
@@ -465,9 +517,14 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
 
             # Detect and update document language
             _detect_and_update_language(doc, file_text)
+            _update_job_progress(session, job_id, 40, "processing", {"stage": "processing_chunks"})
 
             # Process chunks and embeddings
+            _update_job_progress(
+                session, job_id, 60, "processing", {"stage": "generating_embeddings"}
+            )
             _process_chunks_and_embeddings(session, doc, file_text, page_texts, task_context=self)
+            _update_job_progress(session, job_id, 90, "processing", {"stage": "finalizing"})
 
             # Add processing metrics to context
             context.update(
@@ -483,6 +540,19 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
         # Mark document completed
         _mark_status(session, doc, "COMPLETED")
         session.commit()
+
+        # Mark job as completed
+        _update_job_progress(
+            session,
+            job_id,
+            100,
+            "completed",
+            {
+                "document_id": doc.id,
+                "request_id": request_id,
+                "trace_id": trace_id,
+            },
+        )
 
         logger.info(
             "Document processing task completed successfully",
@@ -502,6 +572,9 @@ def process_document_async(self, job_id: str, document_data: dict) -> dict:
             "trace_id": trace_id,
         }
     except Exception as e:
+        # Mark job as failed
+        _update_job_progress(session, job_id, 0, "failed", None, str(e))
+
         logger.error(
             "Document processing task failed",
             job_id=job_id,
