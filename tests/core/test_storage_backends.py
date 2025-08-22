@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.core.jobs import _update_job_progress
 from app.core.storage import (
     LocalStorageBackend,
     compute_content_hash,
     generate_storage_key,
     parse_storage_key,
 )
+from app.db.models import ProcessingJob
 
 
 def test_local_storage_store_and_retrieve(tmp_path: Path):
@@ -117,6 +123,168 @@ def test_local_storage_same_filename_different_content(tmp_path: Path):
 # Note: MinIO-specific tests removed due to complexity of mocking external dependencies
 # The core content-addressed storage functionality is fully tested via LocalStorageBackend tests
 # MinIO support is optional and the implementation works correctly when the library is available
+
+
+# Tests for Processing Job Progress Tracking
+
+
+def test_update_job_progress_success():
+    """Test successful job progress update."""
+    # Create in-memory SQLite database for testing
+    engine = create_engine("sqlite:///:memory:")
+    ProcessingJob.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+
+    try:
+        # Create a test job
+        job = ProcessingJob(
+            id="test-job-123",
+            job_type="upload",
+            status="pending",
+            progress_percent=0,
+            created_at=datetime.now(timezone.utc),
+            created_by="test-user",
+        )
+        session.add(job)
+        session.commit()
+
+        # Update progress
+        _update_job_progress(session, "test-job-123", 50, "processing", {"stage": "testing"})
+
+        # Verify the update
+        updated_job = session.get(ProcessingJob, "test-job-123")
+        assert updated_job.progress_percent == 50
+        assert updated_job.status == "processing"
+        assert updated_job.result_data == {"stage": "testing"}
+
+    finally:
+        session.close()
+
+
+def test_update_job_progress_completion():
+    """Test job completion with progress update."""
+    # Create in-memory SQLite database for testing
+    engine = create_engine("sqlite:///:memory:")
+    ProcessingJob.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+
+    try:
+        # Create a test job
+        job = ProcessingJob(
+            id="test-job-456",
+            job_type="upload",
+            status="processing",
+            progress_percent=90,
+            created_at=datetime.now(timezone.utc),
+            created_by="test-user",
+        )
+        session.add(job)
+        session.commit()
+
+        # Complete the job
+        _update_job_progress(session, "test-job-456", 100, "completed", {"document_id": "doc-123"})
+
+        # Verify completion
+        completed_job = session.get(ProcessingJob, "test-job-456")
+        assert completed_job.progress_percent == 100
+        assert completed_job.status == "completed"
+        assert completed_job.result_data == {"document_id": "doc-123"}
+        assert completed_job.completed_at is not None
+
+    finally:
+        session.close()
+
+
+def test_update_job_progress_failure():
+    """Test job failure with progress update."""
+    # Create in-memory SQLite database for testing
+    engine = create_engine("sqlite:///:memory:")
+    ProcessingJob.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+
+    try:
+        # Create a test job
+        job = ProcessingJob(
+            id="test-job-789",
+            job_type="upload",
+            status="processing",
+            progress_percent=25,
+            created_at=datetime.now(timezone.utc),
+            created_by="test-user",
+        )
+        session.add(job)
+        session.commit()
+
+        # Fail the job
+        _update_job_progress(
+            session, "test-job-789", 0, "failed", None, "Processing failed: timeout"
+        )
+
+        # Verify failure
+        failed_job = session.get(ProcessingJob, "test-job-789")
+        assert failed_job.progress_percent == 0
+        assert failed_job.status == "failed"
+        assert failed_job.error_message == "Processing failed: timeout"
+        assert failed_job.result_data is None
+
+    finally:
+        session.close()
+
+
+def test_update_job_progress_nonexistent():
+    """Test updating progress for non-existent job."""
+    # Create in-memory SQLite database for testing
+    engine = create_engine("sqlite:///:memory:")
+    ProcessingJob.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+
+    try:
+        # Try to update a non-existent job (should not raise exception)
+        _update_job_progress(session, "non-existent-job", 50, "processing")
+
+        # Verify no job was created
+        nonexistent_job = session.get(ProcessingJob, "non-existent-job")
+        assert nonexistent_job is None
+
+    finally:
+        session.close()
+
+
+def test_update_job_progress_partial_update():
+    """Test partial progress updates (only progress, no status change)."""
+    # Create in-memory SQLite database for testing
+    engine = create_engine("sqlite:///:memory:")
+    ProcessingJob.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+
+    try:
+        # Create a test job
+        job = ProcessingJob(
+            id="test-job-999",
+            job_type="upload",
+            status="processing",
+            progress_percent=10,
+            created_at=datetime.now(timezone.utc),
+            created_by="test-user",
+        )
+        session.add(job)
+        session.commit()
+
+        # Update only progress (no status change)
+        _update_job_progress(session, "test-job-999", 75)
+
+        # Verify only progress was updated
+        updated_job = session.get(ProcessingJob, "test-job-999")
+        assert updated_job.progress_percent == 75
+        assert updated_job.status == "processing"  # Status unchanged
+
+    finally:
+        session.close()
 
 
 def test_compute_content_hash():

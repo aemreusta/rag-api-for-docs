@@ -17,12 +17,13 @@ from app.core.logging_config import get_logger, get_request_id, get_trace_id
 from app.core.metrics import get_metrics_backend
 from app.core.quality import QualityAssurance
 from app.core.storage import get_storage_backend
-from app.db.models import Document, DocumentStatusEnum
+from app.db.models import Document, DocumentStatusEnum, ProcessingJob
+
+logger = get_logger(__name__)
 
 router = APIRouter(
     prefix="/docs", tags=["Documents"], responses={404: {"description": "Not found"}}
 )
-logger = get_logger(__name__)
 metrics = get_metrics_backend()
 
 storage = get_storage_backend()
@@ -43,7 +44,7 @@ class DocumentStatus(BaseModel):
 
 
 class DocumentDetail(DocumentSummary):
-    pass
+    job_id: str | None = None
 
 
 # Use a module-level singleton default to satisfy ruff B008
@@ -107,8 +108,8 @@ def _update_document_status(db: Session, doc_id: str) -> None:
         pass
 
 
-def _enqueue_processing_job(doc_id: str, storage_uri: str, filename: str) -> None:
-    """Enqueue background processing job with correlation IDs."""
+def _enqueue_processing_job(doc_id: str, storage_uri: str, filename: str, db: Session) -> str:
+    """Enqueue background processing job with progress tracking."""
     try:
         job_id = str(uuid.uuid4())
         request_id = get_request_id()
@@ -122,6 +123,22 @@ def _enqueue_processing_job(doc_id: str, storage_uri: str, filename: str) -> Non
             "parent_operation": "document_upload",
         }
 
+        # Create ProcessingJob record in database for progress tracking
+        from datetime import datetime, timezone
+
+        processing_job = ProcessingJob(
+            id=job_id,
+            job_type="upload",
+            status="pending",
+            input_data=job_data,
+            progress_percent=0,
+            created_at=datetime.now(timezone.utc),
+            created_by=request_id or "system",
+        )
+        db.add(processing_job)
+        db.commit()
+
+        # Enqueue the background task
         process_document_async.delay(job_id, job_data)
 
         logger.info(
@@ -132,6 +149,9 @@ def _enqueue_processing_job(doc_id: str, storage_uri: str, filename: str) -> Non
             request_id=request_id,
             trace_id=trace_id,
         )
+
+        return job_id
+
     except Exception as e:
         logger.error(
             "Failed to enqueue background job",
@@ -140,6 +160,7 @@ def _enqueue_processing_job(doc_id: str, storage_uri: str, filename: str) -> Non
             error=str(e),
             error_type=type(e).__name__,
         )
+        raise
 
 
 @router.post(
@@ -201,9 +222,9 @@ async def upload_document(
 
     # Update status and enqueue processing
     _update_document_status(db, doc.id)
-    _enqueue_processing_job(doc.id, storage_uri, file.filename)
+    job_id = _enqueue_processing_job(doc.id, storage_uri, file.filename, db)
     metrics.increment_counter("vector_search_requests_total", {"status": "ingest"})
-    return DocumentDetail(id=doc.id, filename=file.filename, status="processing")
+    return DocumentDetail(id=doc.id, filename=file.filename, status="processing", job_id=job_id)
 
 
 DB_DEP_LIST: Session = Depends(get_db_session)
@@ -403,6 +424,7 @@ async def apply_changes(payload: ApplyChangesRequest, db: Session = DB_DEP) -> A
 class JobStatusResponse(BaseModel):
     id: str
     status: Literal["pending", "processing", "completed", "failed", "retry"]
+    progress_percent: int | None = None
     detail: dict | None = None
 
 
@@ -410,13 +432,31 @@ class JobStatusResponse(BaseModel):
     "/jobs/{job_id}",
     response_model=JobStatusResponse,
     summary="Get job status",
-    description="Get background job status by id.",
+    description="Get background job status by id with progress tracking.",
 )
-async def get_job_status(job_id: str) -> JobStatusResponse:
-    """Map Celery job states to API status semantics."""
+async def get_job_status(job_id: str, db: Session = Depends(get_db_session)) -> JobStatusResponse:  # noqa: C901,B008
+    """Get job status with progress tracking from both Celery and database."""
+    progress_percent = None
+    detail = None
+
+    # Query processing_jobs table for progress information
+    try:
+        processing_job = db.query(ProcessingJob).filter(ProcessingJob.id == job_id).first()
+        if processing_job:
+            progress_percent = processing_job.progress_percent
+            if processing_job.result_data:
+                detail = processing_job.result_data
+            elif processing_job.error_message:
+                detail = {"error": processing_job.error_message}
+    except Exception as e:
+        logger = get_logger(__name__)
+        logger.warning("Failed to query processing_jobs table", job_id=job_id, error=str(e))
+
+    # Get Celery job state
     try:
         res = celery_app.AsyncResult(job_id)
         state = (res.state or "PENDING").upper()
+
         if state in {"PENDING"}:
             status = "pending"
         elif state in {"RECEIVED", "STARTED"}:
@@ -427,16 +467,23 @@ async def get_job_status(job_id: str) -> JobStatusResponse:
             status = "failed"
         else:  # SUCCESS or others
             status = "completed"
-        detail = None
-        try:
-            info = res.info  # type: ignore[attr-defined]
-            if isinstance(info, dict):
-                detail = info
-        except Exception:
-            detail = None
-        return JobStatusResponse(id=job_id, status=status, detail=detail)
+
+        # Use Celery result info if no detail from database
+        if detail is None:
+            try:
+                info = res.info  # type: ignore[attr-defined]
+                if isinstance(info, dict):
+                    detail = info
+            except Exception:
+                detail = None
+
     except Exception:
-        return JobStatusResponse(id=job_id, status="pending", detail=None)
+        status = "pending"
+        detail = None
+
+    return JobStatusResponse(
+        id=job_id, status=status, progress_percent=progress_percent, detail=detail
+    )
 
 
 # ----------------------------
