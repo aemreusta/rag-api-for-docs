@@ -21,6 +21,14 @@ def test_metrics_enabled():
     with patch("app.main.settings.PROMETHEUS_ENABLED", True):
         with patch("importlib.util.find_spec") as mock_find_spec:
             mock_find_spec.return_value = True  # prometheus_client is available
+            # Provide a shim module if prometheus_client is not installed
+            import sys
+            from types import SimpleNamespace
+
+            sys.modules.setdefault(
+                "prometheus_client",
+                SimpleNamespace(generate_latest=lambda: b"# HELP ingest_requests_total\n"),
+            )
             with patch("prometheus_client.generate_latest") as mock_generate_latest:
                 mock_generate_latest.return_value = (
                     b"# HELP ingest_requests_total Total number of document ingest requests\n"

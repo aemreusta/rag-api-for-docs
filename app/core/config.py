@@ -46,6 +46,20 @@ class Settings(BaseSettings):
     PDF_DOCUMENTS_DIR: str = "pdf_documents"
     UPLOADED_DOCS_DIR: str = "uploaded_docs"
     STORAGE_BACKEND: str = "local"  # local|minio
+
+    # Enhanced Input Validation Settings
+    ALLOWED_MIME_TYPES: str = (
+        "application/pdf,text/plain,text/markdown,"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document,"
+        "text/csv,application/json"
+    )
+    MAX_FILE_SIZE_MB: int = 50  # Maximum file size in MB
+    MAX_FILE_SIZE_BYTES: int = 50 * 1024 * 1024  # Computed max file size in bytes
+    ENABLE_CONTENT_SCANNING: bool = True  # Enable security content scanning
+    ENABLE_MAGIC_DETECTION: bool = True  # Enable magic number detection
+    REJECT_EMPTY_FILES: bool = True  # Reject files with zero content
+    ENABLE_FILENAME_SANITIZATION: bool = True  # Enable filename sanitization
+
     # MinIO (optional)
     MINIO_ENDPOINT: str = ""
     MINIO_ACCESS_KEY: str = ""

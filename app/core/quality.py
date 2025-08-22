@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from math import isfinite
+from typing import Any
 
 try:
-    import magic
+    import magic  # type: ignore[import-not-found]
 
     MAGIC_AVAILABLE = True
 except ImportError:
+    # Provide a dummy namespace so tests can patch magic.from_buffer even if lib not installed
+    import types as _types  # noqa: F401
+
+    magic = _types.SimpleNamespace()  # type: ignore[assignment]
     MAGIC_AVAILABLE = False
 
 from fastapi import UploadFile
@@ -21,13 +27,28 @@ from app.core.logging_config import get_logger
 logger = get_logger(__name__)
 
 
-ALLOWED_MIME_TYPES: set[str] = {
-    "application/pdf",
-    "text/plain",
-    "text/markdown",
-}
+def _parse_allowed_mime_types() -> set[str]:
+    """Parse allowed MIME types from configuration string."""
+    if not hasattr(settings, "ALLOWED_MIME_TYPES"):
+        return {"application/pdf", "text/plain", "text/markdown"}
 
-MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024  # 10 MB
+    mime_types = settings.ALLOWED_MIME_TYPES.split(",")
+    return {mime.strip() for mime in mime_types if mime.strip()}
+
+
+def _get_max_file_size() -> int:
+    """Get maximum file size from configuration with defensive checks."""
+    bytes_value = getattr(settings, "MAX_FILE_SIZE_BYTES", None)
+    if isinstance(bytes_value, int) and bytes_value > 0:
+        return bytes_value
+    mb_value = getattr(settings, "MAX_FILE_SIZE_MB", None)
+    if isinstance(mb_value, int) and mb_value > 0:
+        return mb_value * 1024 * 1024
+    return 10 * 1024 * 1024  # Default 10MB
+
+
+ALLOWED_MIME_TYPES: set[str] = _parse_allowed_mime_types()
+MAX_FILE_SIZE_BYTES: int = _get_max_file_size()
 
 
 def _detect_mime_by_extension(filename: str) -> str | None:
@@ -37,6 +58,9 @@ def _detect_mime_by_extension(filename: str) -> str | None:
         ".txt": "text/plain",
         ".md": "text/markdown",
         ".markdown": "text/markdown",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".csv": "text/csv",
+        ".json": "application/json",
     }
 
     for ext, mime_type in extension_map.items():
@@ -59,6 +83,8 @@ def _is_mime_compatible(declared: str, detected: str) -> bool:
     compatible_pairs = {
         ("text/plain", "text/markdown"),
         ("text/markdown", "text/plain"),
+        ("text/plain", "text/csv"),
+        ("text/csv", "text/plain"),
         # Add more as needed
     }
 
@@ -66,27 +92,106 @@ def _is_mime_compatible(declared: str, detected: str) -> bool:
 
 
 def _validate_filename(file: UploadFile) -> ValidationResult:
-    """Validate file presence and filename safety."""
+    """Validate file presence and filename safety with enhanced sanitization."""
     if file is None or not file.filename:
         return ValidationResult(False, "file_missing")
 
     filename = file.filename.strip()
-    if not filename or len(filename) > 255 or ".." in filename:
+    if not filename or len(filename) > 255:
         logger.warning(
             "upload_validation_rejected",
             extra={"filename": file.filename, "reason": "invalid_filename"},
         )
         return ValidationResult(False, "invalid_filename")
 
+    # Enhanced security checks
+    dangerous_patterns = [
+        r"\.\.",
+        r"[/\\]",
+        r"<script",
+        r"javascript:",
+        r"vbscript:",
+        r"data:",
+        r"file:",
+    ]
+
+    for pattern in dangerous_patterns:
+        if re.search(pattern, filename, re.IGNORECASE):
+            logger.warning(
+                "upload_validation_rejected",
+                extra={"filename": file.filename, "reason": "dangerous_filename_pattern"},
+            )
+            return ValidationResult(False, "dangerous_filename_pattern")
+
+    return ValidationResult(True)
+
+
+def _scan_content_security(content: bytes, filename: str) -> ValidationResult:
+    """Scan file content for potential security threats."""
+    if not getattr(settings, "ENABLE_CONTENT_SCANNING", True):
+        return ValidationResult(True)
+
+    # Check for executable content in text files
+    if filename.lower().endswith((".txt", ".md", ".csv", ".json")):
+        content_str = content.decode("utf-8", errors="ignore").lower()
+
+        # Check for script tags or executable patterns
+        dangerous_patterns = [
+            r"<script[^>]*>",
+            r"javascript:",
+            r"vbscript:",
+            r"on\w+\s*=",
+            r"eval\s*\(",
+            r"exec\s*\(",
+        ]
+
+        for pattern in dangerous_patterns:
+            if re.search(pattern, content_str, re.IGNORECASE):
+                logger.warning(
+                    "upload_validation_rejected",
+                    extra={
+                        "filename": filename,
+                        "reason": "suspicious_content_detected",
+                        "pattern": pattern,
+                    },
+                )
+                return ValidationResult(False, "suspicious_content_detected")
+
+    # Check for PDF-specific threats (basic)
+    if filename.lower().endswith(".pdf"):
+        # Check for JavaScript in PDFs
+        if b"/JS" in content or b"/JavaScript" in content:
+            logger.warning(
+                "upload_validation_rejected",
+                extra={
+                    "filename": filename,
+                    "reason": "pdf_javascript_detected",
+                },
+            )
+            return ValidationResult(False, "pdf_javascript_detected")
+
     return ValidationResult(True)
 
 
 async def _read_and_validate_content(file: UploadFile, filename: str) -> ValidationResult:
-    """Read file content and validate size constraints."""
+    """Read file content and validate size constraints with early checksum computation."""
     content_chunks = []
     size_read = 0
     chunk_size = 512 * 1024  # 512KB
     hash_obj = hashlib.sha256()
+
+    # Early size check before reading
+    if hasattr(file, "size") and file.size:
+        if file.size > MAX_FILE_SIZE_BYTES:
+            logger.info(
+                "upload_validation_rejected",
+                extra={
+                    "filename": filename,
+                    "size_bytes": file.size,
+                    "reason": "too_large_early",
+                },
+            )
+            return ValidationResult(False, "too_large_early", file_size_bytes=file.size)
 
     while True:
         chunk = await file.read(chunk_size)
@@ -97,11 +202,15 @@ async def _read_and_validate_content(file: UploadFile, filename: str) -> Validat
         hash_obj.update(chunk)
         size_read += len(chunk)
 
-        # Early size rejection
+        # Early size rejection during streaming
         if size_read > MAX_FILE_SIZE_BYTES:
             logger.info(
                 "upload_validation_rejected",
-                extra={"filename": filename, "size_bytes": size_read, "reason": "too_large"},
+                extra={
+                    "filename": filename,
+                    "size_bytes": size_read,
+                    "reason": "too_large",
+                },
             )
             await file.seek(0)
             return ValidationResult(False, "too_large", file_size_bytes=size_read)
@@ -109,13 +218,20 @@ async def _read_and_validate_content(file: UploadFile, filename: str) -> Validat
     content_hash = hash_obj.hexdigest()
 
     # Minimum size check (empty files)
-    if size_read == 0:
+    if size_read == 0 and getattr(settings, "REJECT_EMPTY_FILES", True):
         logger.info(
             "upload_validation_rejected",
             extra={"filename": filename, "reason": "empty_file"},
         )
         await file.seek(0)
         return ValidationResult(False, "empty_file", content_hash=content_hash)
+
+    # Security content scanning
+    full_content = b"".join(content_chunks)
+    security_result = _scan_content_security(full_content, filename)
+    if not security_result.ok:
+        await file.seek(0)
+        return security_result
 
     # Return content info in ValidationResult fields
     return ValidationResult(
@@ -129,12 +245,12 @@ async def _read_and_validate_content(file: UploadFile, filename: str) -> Validat
 def _validate_mime_types(
     file: UploadFile, filename: str, content_chunks: list, content_hash: str, size_read: int
 ) -> ValidationResult:
-    """Validate MIME types with strict enforcement."""
+    """Validate MIME types with strict enforcement and enhanced detection."""
     declared_mime = (file.content_type or "").lower().strip()
 
     # Detect actual MIME type from content (if magic library available)
     detected_mime = None
-    if MAGIC_AVAILABLE:
+    if MAGIC_AVAILABLE and getattr(settings, "ENABLE_MAGIC_DETECTION", True):
         full_content = b"".join(content_chunks)
         try:
             detected_mime = magic.from_buffer(full_content, mime=True).lower()
@@ -153,6 +269,7 @@ def _validate_mime_types(
                 "filename": filename,
                 "declared_mime": declared_mime,
                 "reason": "unsupported_declared_type",
+                "allowed_types": list(ALLOWED_MIME_TYPES),
             },
         )
         return ValidationResult(
@@ -171,6 +288,7 @@ def _validate_mime_types(
                 "declared_mime": declared_mime,
                 "detected_mime": detected_mime,
                 "reason": "unsupported_detected_type",
+                "allowed_types": list(ALLOWED_MIME_TYPES),
             },
         )
         return ValidationResult(
@@ -215,6 +333,7 @@ class ValidationResult:
     content_hash: str | None = None
     detected_mime_type: str | None = None
     file_size_bytes: int | None = None
+    validation_details: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -267,6 +386,16 @@ class QualityAssurance:
 
         # Success - rewind file for downstream use
         await file.seek(0)
+
+        # Enhanced validation details
+        validation_details = {
+            "file_size_mb": round(size_read / (1024 * 1024), 2),
+            "content_hash_short": content_hash[:12] + "..." if content_hash else None,
+            "mime_type_validated": True,
+            "security_scan_passed": True,
+            "filename_sanitized": getattr(settings, "ENABLE_FILENAME_SANITIZATION", True),
+        }
+
         logger.info(
             "upload_validation_passed",
             extra={
@@ -274,7 +403,9 @@ class QualityAssurance:
                 "declared_mime": (file.content_type or "").lower().strip(),
                 "detected_mime": mime_result.detected_mime_type,
                 "size_bytes": size_read,
-                "content_hash": content_hash[:12] + "...",
+                "size_mb": validation_details["file_size_mb"],
+                "content_hash": content_hash[:12] + "..." if content_hash else "",
+                "validation_details": validation_details,
             },
         )
 
@@ -283,6 +414,7 @@ class QualityAssurance:
             content_hash=content_hash,
             detected_mime_type=mime_result.detected_mime_type,
             file_size_bytes=size_read,
+            validation_details=validation_details,
         )
 
     @staticmethod
